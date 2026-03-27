@@ -41,6 +41,9 @@ gulp-cli ingest file incident-001 win_evtx '/evidence/**/*.evtx'
 
 # Ingest from multiple locations
 gulp-cli ingest file incident-001 win_evtx '/suspect-machine/*.evtx' '/network-share/backups/*.evtx'
+
+# Preview parser output without ingesting
+gulp-cli ingest file incident-001 win_evtx '/suspect-machine/System.evtx' --preview
 ```
 
 ### Concurrent Multi-Source Ingestion
@@ -143,6 +146,144 @@ gulp-cli ingest file incident-001 win_evtx '/evidence/**/*.evtx'
 gulp-cli stats list incident-001 --refresh-seconds 0.5
 ```
 
+### Bulk Delete Request Stats
+
+```bash
+# Delete request stats created by admin
+gulp-cli stats delete-bulk incident-001 \
+  --flt '{"user_ids":["admin"]}'
+
+# Delete all request stats in the operation
+gulp-cli stats delete-bulk incident-001 --all
+```
+
+### Cancel a Running Request
+
+```bash
+# Cancel with default grace window for stats cleanup
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237
+
+# Cancel and purge stats immediately
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237 --expire-now
+```
+
+---
+
+## Rebase Workflows
+
+### Shift All Documents Forward in Time
+
+```bash
+gulp-cli db rebase-by-query incident-001 --offset-msec 3600000 --wait
+```
+
+### Rebase Only a Filtered Subset
+
+```bash
+gulp-cli db rebase-by-query incident-001 \
+  --offset-msec -300000 \
+  --flt '{"source_ids":["security"]}' \
+  --wait
+```
+
+### Rebase with a Custom Script
+
+```bash
+gulp-cli db rebase-by-query incident-001 \
+  --offset-msec 0 \
+  --script 'ctx._source["custom_ts"] = params.now;'
+```
+
+---
+
+## Collaboration Workflows
+
+### Create a Time-Pinned Note
+
+```bash
+gulp-cli collab note create incident-001 sdk_context security \
+  "Analyst note" \
+  "Suspicious login spike around privilege escalation" \
+  --time-pin 1774626000000000000 \
+  --tags suspicious,review
+```
+
+### Create a Note Attached to a Document
+
+```bash
+gulp-cli collab note create incident-001 sdk_context security \
+  "Document note" \
+  "Inspect parent process and command line" \
+  --doc '{"_id":"doc-123","gulp.operation_id":"incident-001","gulp.source_id":"security"}'
+```
+
+### Update and List Notes
+
+```bash
+gulp-cli collab note update note-123 --text "Reviewed by analyst-2" --tags reviewed,done
+gulp-cli collab note list incident-001
+```
+
+### Create and Maintain Links Between Documents
+
+```bash
+# Correlate one source document to multiple targets
+gulp-cli collab link create incident-001 doc-a --doc-ids doc-b,doc-c \
+  --name "same user session" \
+  --description "Events related by identical logon session id"
+
+# Update the target set later
+gulp-cli collab link update link-123 --doc-ids doc-b,doc-d
+
+# Inspect links
+gulp-cli collab link list incident-001
+```
+
+### Create and Update Highlights
+
+```bash
+# Mark a suspicious time window
+gulp-cli collab highlight create incident-001 \
+  --time-range 1774626000000000000,1774626060000000000 \
+  --name "Burst of activity" \
+  --color red \
+  --tags suspicious,timeline
+
+# Expand the reviewed window
+gulp-cli collab highlight update hl-123 \
+  --time-range 1774626000000000000,1774626120000000000
+
+# Inspect highlights
+gulp-cli collab highlight list incident-001
+```
+
+### Export Raw Collaboration Objects as JSON
+
+```bash
+gulp-cli collab note list incident-001 --json
+gulp-cli collab link list incident-001 --json
+gulp-cli collab highlight list incident-001 --json
+```
+
+### Bulk Delete Collaboration Objects
+
+```bash
+# Delete reviewed notes from a specific source
+gulp-cli collab note delete-bulk incident-001 \
+  --flt '{"source_ids":["security"],"tags":["reviewed"]}'
+
+# Delete links that reference a specific document id
+gulp-cli collab link delete-bulk incident-001 \
+  --flt '{"doc_ids":["doc-a"]}'
+
+# Delete highlights created in a specific time window
+gulp-cli collab highlight delete-bulk incident-001 \
+  --flt '{"time_created_range":[1774626000000,1774629600000]}'
+
+# Delete every note in the operation
+gulp-cli collab note delete-bulk incident-001 --all
+```
+
 ---
 
 ## Query Workflows
@@ -151,7 +292,10 @@ gulp-cli stats list incident-001 --refresh-seconds 0.5
 
 ```bash
 # Get overview of ingested data
-gulp-cli query raw incident-001 --q '{"query":{"match_all":{}}}' --limit 100
+gulp-cli query raw incident-001 --q '{"query":{"match_all":{}}}'
+
+# Fast synchronous preview
+gulp-cli query raw incident-001 --q '{"query":{"match_all":{}}}' --preview
 ```
 
 ### Search by Field Value
@@ -163,7 +307,7 @@ gulp-cli query raw incident-001 \
 
 # Find events from specific computer
 gulp-cli query raw incident-001 \
-  --q '{"query":{"term":{"Computer":"value":"SUSPECT-PC-001"}}}'
+  --q '{"query":{"term":{"Computer":{"value":"SUSPECT-PC-001"}}}}'
 ```
 
 ### Complex Queries (Range, Boolean)
@@ -202,22 +346,55 @@ gulp-cli query raw incident-001 \
 
 ```bash
 # Query only Security events
-gulp-cli query gulp incident-001 --flt '{"source":"Security"}' --limit 100
+gulp-cli query gulp incident-001 --flt '{"source_ids":["security"]}'
 
 # Query only events tagged as "suspicious"
-gulp-cli query gulp incident-001 --flt '{"tag":"suspicious"}' --limit 100
-```
+gulp-cli query gulp incident-001 --flt '{"tags":["suspicious"]}'
 
-### Save Query Results
+# Preview filtered results
+gulp-cli query gulp incident-001 --flt '{"tags":["suspicious"]}' --preview
+
+# Paginated results via q_options overrides
+gulp-cli query gulp incident-001 --flt '{"tags":["suspicious"]}' --limit 200 --offset 400
+
+### Query External Data Source
 
 ```bash
-# Save all results to JSON file for processing
-gulp-cli query raw incident-001 \
+gulp-cli query external incident-001 \
+  --plugin query_elasticsearch \
+  --plugin-params '{"custom_parameters":{"index":"external_logs"}}' \
   --q '{"query":{"match_all":{}}}' \
-  --output-file findings.json
+  --preview --limit 100 --offset 0
+```
+```
+
+### Export Query Results
+
+```bash
+# Export Gulp query results to a JSON file
+gulp-cli query gulp-export incident-001 \
+  --flt '{"source_ids":["security"]}' \
+  --output findings.json
 
 # Now process with external tools
-cat findings.json | jq '.documents | length'
+cat findings.json | jq 'length'
+```
+
+### Aggregation, Document Lookup, and History
+
+```bash
+# Aggregation by event code
+gulp-cli query aggregation incident-001 \
+  --q '{"size":0,"aggs":{"by_event_code":{"terms":{"field":"event.code"}}}}'
+
+# Get one document by _id
+gulp-cli query document-get-by-id incident-001 AVY84pUBM0e5DCHhCzDq
+
+# Max/min timeline boundaries
+gulp-cli query max-min-per-field incident-001 --group-by event.code
+
+# Query history for authenticated user
+gulp-cli query history-get
 ```
 
 ---
@@ -382,7 +559,7 @@ gulp-cli ingest file $INCIDENT pcap "$EVIDENCE_DIR/network/*.pcap" --wait
 
 # 3. Baseline queries
 echo "Running baseline queries..."
-gulp-cli query raw $INCIDENT --q '{"query":{"match_all":{}}}' --limit 10 > baseline.json
+  gulp-cli query raw $INCIDENT --q '{"query":{"match_all":{}}}' --preview > baseline.json
 
 # 4. Run Sigma rules
 echo "Executing Sigma rules..."
@@ -409,10 +586,9 @@ gulp-cli enrich update $INCIDENT \
 
 # 7. Export results
 echo "Exporting findings..."
-gulp-cli query gulp $INCIDENT \
-  --flt '{"tag":"sigma-detected"}' \
-  --limit 10000 \
-  --output-file results_${INCIDENT}.json
+    gulp-cli query gulp-export $INCIDENT \
+      --flt '{"tags":["sigma-detected"]}' \
+      --output results_${INCIDENT}.json
 
 echo "Investigation complete. Results in results_${INCIDENT}.json"
 ```
@@ -554,6 +730,154 @@ if ! gulp-cli operation get "$INCIDENT" > /dev/null 2>&1; then
 fi
 
 echo "Ready for investigations!"
+```
+
+---
+
+## User Group Workflows
+
+### Set Up Role-Based Access
+
+```bash
+# Create analyst group with read+edit
+gulp-cli user-group create analysts --permission read,edit \
+  --description "Field analysts – read and annotate"
+
+# Create ingestors group
+gulp-cli user-group create ingestors --permission read,edit,ingest \
+  --description "Can run ingestion pipelines"
+
+# Add users
+gulp-cli user-group add-user analysts alice
+gulp-cli user-group add-user analysts bob
+gulp-cli user-group add-user ingestors carol
+
+# List groups
+gulp-cli user-group list
+```
+
+### Update and Clean Up Groups
+
+```bash
+# Promote analysts to also ingest
+gulp-cli user-group update analysts --permission read,edit,ingest
+
+# Remove a user from a group
+gulp-cli user-group remove-user analysts bob
+
+# Delete a group (users are kept)
+gulp-cli user-group delete ingestors
+```
+
+---
+
+## ACL / Access Control Workflows
+
+### Grant Operation Access to a Group
+
+```bash
+# By default operations require explicit grants
+# Grant the analysts group access to an operation
+gulp-cli acl add-group incident-001 --obj-type operation --group-id analysts
+
+# Later revoke it
+gulp-cli acl remove-group incident-001 --obj-type operation --group-id analysts
+```
+
+### Grant Access to Individual Users
+
+```bash
+# Grant alice access to a specific note
+gulp-cli acl add-user note-123 --obj-type note --user-id alice
+
+# Revoke
+gulp-cli acl remove-user note-123 --obj-type note --user-id alice
+```
+
+### Private / Public Objects
+
+```bash
+# Make a sensitive note private (owner or admin only)
+gulp-cli acl make-private note-secret --obj-type note
+
+# Publish it back to everyone
+gulp-cli acl make-public note-secret --obj-type note
+
+# Make a link private
+gulp-cli acl make-private link-456 --obj-type link
+```
+
+---
+
+## Index Management Workflows
+
+### Inspect Indexes
+
+```bash
+# List all indexes
+gulp-cli db list-indexes
+
+# As JSON (pipe to jq)
+gulp-cli db list-indexes --json | jq '.[].name'
+```
+
+### Refresh After Ingestion
+
+```bash
+# Force index refresh so new documents are immediately searchable
+gulp-cli db refresh-index incident-001
+```
+
+### Remove a Stale Investigation (Destructive)
+
+```bash
+# Delete index AND its collab operation
+gulp-cli db delete-index old-incident --yes
+
+# Delete index only, keep the operation metadata
+gulp-cli db delete-index old-incident --keep-operation --yes
+```
+
+---
+
+## Storage Workflows
+
+### List Stored Files
+
+```bash
+# List files for one operation
+gulp-cli storage list-files --operation-id incident-001
+
+# List files for one operation/context pair
+gulp-cli storage list-files --operation-id incident-001 --context-id sdk_context
+
+# Continue from pagination token
+gulp-cli storage list-files --operation-id incident-001 --continuation-token abc123
+```
+
+### Download a File by Storage ID
+
+```bash
+gulp-cli storage get-file incident-001 \
+  incident-001/context-a/source-security/System.evtx \
+  --output ./downloads/System.evtx
+```
+
+### Delete Files by ID or Tags
+
+```bash
+# Delete one specific file
+gulp-cli storage delete-by-id incident-001 \
+  incident-001/context-a/source-security/System.evtx
+
+# Delete all files for one operation
+gulp-cli storage delete-by-tags --operation-id incident-001
+
+# Delete files only for one context inside one operation
+gulp-cli storage delete-by-tags --operation-id incident-001 --context-id sdk_context
+
+# Global cleanup (dangerous)
+gulp-cli storage delete-by-tags --all --yes
 ```
 
 ---

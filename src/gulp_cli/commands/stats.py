@@ -12,7 +12,8 @@ from rich.progress_bar import ProgressBar
 from rich.table import Table
 
 from gulp_cli.client import get_client
-from gulp_cli.output import console, print_error
+from gulp_cli.output import console, print_error, print_json
+from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Request stats commands")
 
@@ -330,5 +331,50 @@ def list_stats(
                     current = await _fetch_filtered(client)
                     if not current:
                         break
+
+    asyncio.run(_run())
+
+
+@app.command("delete-bulk")
+def delete_bulk(
+    operation_id: str,
+    flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
+    delete_all: bool = typer.Option(False, "--all", help="Delete all request stats in the operation (dangerous)"),
+) -> None:
+    """Delete request stats using the server-side object_delete_bulk API."""
+
+    async def _run() -> None:
+        if not delete_all and not flt:
+            raise typer.BadParameter("Provide --flt or pass --all to delete all request stats in the operation")
+        flt_obj = parse_json_option(flt, field_name="flt") or {}
+        async with get_client() as client:
+            deleted = await client.plugins.object_delete_bulk(
+                operation_id=operation_id,
+                obj_type="request_stats",
+                flt=flt_obj,
+            )
+            print_json(deleted)
+
+    asyncio.run(_run())
+
+
+@app.command("cancel")
+def cancel_request(
+    req_id: str,
+    expire_now: bool = typer.Option(
+        False,
+        "--expire-now",
+        help="Immediately expire and delete request stats entry after cancellation",
+    ),
+) -> None:
+    """Cancel a running request using the server-side request_cancel API."""
+
+    async def _run() -> None:
+        async with get_client() as client:
+            result = await client.plugins.request_cancel(
+                req_id_to_cancel=req_id,
+                expire_now=expire_now,
+            )
+            print_json(result)
 
     asyncio.run(_run())

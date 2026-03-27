@@ -166,6 +166,14 @@ gulp-cli ingest file my_investigation win_evtx '/gulp/samples/win_evtx/*.evtx'
 
 This ingests all `.evtx` files concurrently.
 
+### Preview Before Ingest
+
+```bash
+gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evtx --preview
+```
+
+This runs parser preview without persisting documents.
+
 ### Wait for Completion
 
 ```bash
@@ -173,6 +181,16 @@ gulp-cli ingest file my_investigation win_evtx '/gulp/samples/win_evtx/*.evtx' -
 ```
 
 This shows a real-time progress bar while documents are being ingested.
+
+### Rebase Timestamps
+
+If you need to shift document timestamps after ingestion:
+
+```bash
+gulp-cli db rebase-by-query my_investigation --offset-msec 3600000 --wait
+```
+
+This rebases `@timestamp` and `gulp.timestamp` forward by one hour.
 
 ---
 
@@ -201,22 +219,50 @@ gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}'
 ### Query with Limit
 
 ```bash
-gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --limit 10
+gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --limit 10 --offset 0
+
+# Synchronous preview mode
+gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --preview
 ```
 
 ### Query with Filter
 
 ```bash
 # Get only events from Security source
-gulp-cli query gulp my_investigation --flt '{"source":"Security"}'
+gulp-cli query gulp my_investigation --flt '{"source_ids":["security"]}'
 ```
 
-### Sigma Rule Query
+### Aggregation Query
 
-Assuming you have a Sigma rule file:
+Compute a synchronous aggregation directly:
 
 ```bash
-gulp-cli query sigma my_investigation --rule-file /path/to/process_creation.yml
+gulp-cli query aggregation my_investigation \
+  --q '{"size":0,"aggs":{"by_event_code":{"terms":{"field":"event.code"}}}}'
+```
+
+### Get One Document by ID
+
+```bash
+gulp-cli query document-get-by-id my_investigation AVY84pUBM0e5DCHhCzDq
+```
+
+### Export Query Results to JSON
+
+```bash
+gulp-cli query gulp-export my_investigation \
+  --flt '{"source_ids":["security"]}' \
+  --output ./my_investigation-security.json
+```
+
+### Query External Source
+
+```bash
+gulp-cli query external my_investigation \
+  --plugin query_elasticsearch \
+  --plugin-params '{"custom_parameters":{"index":"external_logs"}}' \
+  --q '{"query":{"match_all":{}}}' \
+  --preview --limit 50 --offset 0
 ```
 
 ---
@@ -258,16 +304,66 @@ gulp-cli enrich update my_investigation \
 
 Add and view collaboration objects (notes, links, highlights).
 
+### Create a Note
+
+At least one of `--time-pin` or `--doc` is required when creating a note.
+
+```bash
+gulp-cli collab note create my_investigation sdk_context security \
+  "First analyst note" \
+  "Review the process tree around the alert" \
+  --time-pin 1774626000000000000
+```
+
 ### List Notes
 
 ```bash
-gulp-cli collab note list my_investigation --limit 20
+gulp-cli collab note list my_investigation
+```
+
+### Create a Link
+
+```bash
+gulp-cli collab link create my_investigation doc-a --doc-ids doc-b,doc-c \
+  --name "same activity cluster"
+```
+
+### Create a Highlight
+
+```bash
+gulp-cli collab highlight create my_investigation \
+  --time-range 1774626000000000000,1774626060000000000 \
+  --name "Alert window"
 ```
 
 ### Delete a Note
 
 ```bash
-gulp-cli collab note delete my_investigation --note-id abc123def456
+gulp-cli collab note delete abc123def456
+```
+
+### Bulk Delete Collaboration Objects
+
+```bash
+# Delete notes matching a collab filter
+gulp-cli collab note delete-bulk my_investigation \
+  --flt '{"source_ids":["security"],"tags":["reviewed"]}'
+```
+
+### Bulk Delete Request Stats
+
+```bash
+gulp-cli stats delete-bulk my_investigation --flt '{"user_ids":["admin"]}'
+```
+
+### Cancel a Running Request
+
+```bash
+# Cancel by request id
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237
+
+# Cancel and remove stats immediately
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237 --expire-now
 ```
 
 ---
@@ -284,10 +380,12 @@ gulp-cli --help
 gulp-cli ingest --help
 gulp-cli query --help
 gulp-cli enrich --help
+gulp-cli collab --help
 
 # Specific command help
 gulp-cli ingest file --help
 gulp-cli query raw --help
+gulp-cli collab note create --help
 ```
 
 ---
@@ -345,6 +443,77 @@ gulp-cli query gulp multi-source-incident --flt '{"source":"windows"}'
 1. **[Command Reference](command-reference.md)** — detailed documentation for all commands
 2. **[Practical Examples](examples.md)** — advanced use cases and recipes
 3. **[Troubleshooting](troubleshooting-cli.md)** — common issues and solutions
+
+---
+
+## Step 10: User Groups and Access Control
+
+Organize users into groups and control who can access which objects.
+
+### Create groups and add users
+
+```bash
+# Create a read/edit analysts group
+gulp-cli user-group create analysts --permission read,edit
+
+# Add users
+gulp-cli user-group add-user analysts alice
+gulp-cli user-group add-user analysts bob
+
+# List groups
+gulp-cli user-group list
+```
+
+### Grant operation access to a group
+
+```bash
+# Operations require explicit grants — give the analysts group access
+gulp-cli acl add-group incident-001 --obj-type operation --group-id analysts
+
+# Grant a single user access to a note
+gulp-cli acl add-user note-xyz --obj-type note --user-id alice
+
+# Make a sensitive note visible only to its owner/admin
+gulp-cli acl make-private note-xyz --obj-type note
+```
+
+---
+
+## Step 11: Index Management
+
+```bash
+# List all OpenSearch indexes
+gulp-cli db list-indexes
+
+# Force a refresh so new documents are searchable immediately
+gulp-cli db refresh-index incident-001
+
+# Permanently delete an index and its data (with confirmation)
+gulp-cli db delete-index old-test-op --yes
+```
+
+---
+
+## Step 12: Storage Files
+
+Use storage commands to inspect, download, and clean filestore objects.
+
+```bash
+# List files for an operation
+gulp-cli storage list-files --operation-id my_investigation
+
+# Download one file by storage id
+gulp-cli storage get-file my_investigation \
+  my_investigation/context-a/source-security/System.evtx \
+  --output ./System.evtx
+
+# Delete one file
+gulp-cli storage delete-by-id my_investigation \
+  my_investigation/context-a/source-security/System.evtx
+
+# Delete all files for one operation
+gulp-cli storage delete-by-tags --operation-id my_investigation
+```
 
 ---
 

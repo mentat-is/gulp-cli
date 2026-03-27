@@ -153,6 +153,11 @@ def ingest_file(
     context_name: str = typer.Option("sdk_context", "--context-name"),
     plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params"),
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
+    preview: bool = typer.Option(
+        False,
+        "--preview",
+        help="Run ingestion preview (no persistence) and return preview payload",
+    ),
     wait: bool = typer.Option(
         False,
         "--wait",
@@ -198,6 +203,9 @@ def ingest_file(
     # Async runner                                                         #
     # ------------------------------------------------------------------ #
     async def _run() -> None:
+        if preview and wait:
+            raise typer.BadParameter("--preview and --wait are mutually exclusive")
+
         async with get_client() as client:
             # Establish WS BEFORE any ingest call so ws_id is live when the
             # worker tries to publish its first STATS_CREATE event.
@@ -207,6 +215,24 @@ def ingest_file(
                 "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
                 "flt": parse_json_option(flt, field_name="flt") or {},
             }
+
+            if preview:
+                previews: list[dict[str, Any]] = []
+                for file_path in unique_files:
+                    data = await client.ingest.preview(
+                        operation_id=operation_id,
+                        plugin_name=plugin,
+                        file_path=file_path,
+                        params={
+                            "context_name": context_name,
+                            "plugin_params": params["plugin_params"],
+                            "flt": params["flt"],
+                            "original_file_path": str(Path(file_path).resolve()),
+                        },
+                    )
+                    previews.append({"file": file_path, "preview": data})
+                print_json(previews)
+                return
 
             async def _fire_one(file_path: str) -> tuple[str, str]:
                 """Submit ingestion for one file; returns (file_path, req_id)."""

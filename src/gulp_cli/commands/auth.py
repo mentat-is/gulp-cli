@@ -32,6 +32,7 @@ def login(
             print_json(
                 {
                     "status": "ok",
+                    "token": token_session.token,
                     "url": url.rstrip("/"),
                     "user_id": token_session.user_id,
                     "expires_at": token_session.expires_at,

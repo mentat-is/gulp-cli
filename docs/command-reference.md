@@ -373,10 +373,12 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `FILE` — File path or glob pattern (multiple allowed)
 
 **Options:**
+- `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
-- `--source-id TEXT` — Add to existing source (optional)
+- `--flt TEXT` — JSON object for `GulpIngestionFilter`
+- `--preview` — Run preview-only ingestion (no persistence)
 - `--wait` — Wait for completion with progress
-- `--timeout INTEGER` — Timeout in seconds (default: 3600)
+- `--wait-timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
 ```bash
@@ -394,6 +396,9 @@ gulp-cli ingest file my_op win_evtx '**/*.evtx' '/logs/*.json'
 
 # With plugin parameters
 gulp-cli ingest file my_op csv file.csv --plugin-params '{"delimiter":";","encoding":"utf-8"}'
+
+# Preview mode (no ingestion persisted)
+gulp-cli ingest file my_op win_evtx /path/to/System.evtx --preview
 
 # Wait for completion
 gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --wait
@@ -492,10 +497,10 @@ gulp-cli query raw OPERATION_ID [OPTIONS]
 **Options:**
 - `--q TEXT` — OpenSearch query JSON (required)
 - `--q-options TEXT` — Query options JSON
+- `--preview` — Enable `q_options.preview_mode=true` (synchronous preview result)
+- `--limit INTEGER` — Set `q_options.limit`
+- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for query completion
-- `--timeout INTEGER` — Timeout in seconds
-- `--limit INTEGER` — Result limit
-- `--output-file TEXT` — Save results to file
 
 **Examples:**
 ```bash
@@ -505,14 +510,17 @@ gulp-cli query raw my_op --q '{"query":{"match_all":{}}}'
 # Search specific field
 gulp-cli query raw my_op --q '{"query":{"term":{"EventID":4688}}}'
 
-# With limit
-gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --limit 100
+# Preview mode (synchronous, limited result set)
+gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --preview
+
+# Pagination override
+gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --limit 100 --offset 200
 
 # Wait for completion
 gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --wait
 
-# Save results
-gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --output-file results.json
+# Preview mode can also be provided through q-options
+gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --q-options '{"preview_mode":true}'
 ```
 
 ---
@@ -531,20 +539,126 @@ gulp-cli query gulp OPERATION_ID [OPTIONS]
 **Options:**
 - `--flt TEXT` — Filter JSON
 - `--q-options TEXT` — Query options JSON
-- `--limit INTEGER` — Result limit (default: 50)
-- `--offset INTEGER` — Offset
+- `--preview` — Enable `q_options.preview_mode=true` (synchronous preview result)
+- `--limit INTEGER` — Set `q_options.limit`
+- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for completion
 
 **Examples:**
 ```bash
-# Get all documents
-gulp-cli query gulp my_op --limit 100
+# Get documents with default options
+gulp-cli query gulp my_op
 
 # Filter by source
-gulp-cli query gulp my_op --flt '{"source":"Security"}'
+gulp-cli query gulp my_op --flt '{"source_ids":["security"]}'
 
 # Filter by tag
-gulp-cli query gulp my_op --flt '{"tag":"suspicious"}'
+gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}'
+
+# Preview mode
+gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}' --preview
+
+# Pagination override
+gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}' --limit 200 --offset 400
+```
+
+---
+
+#### `document-get-by-id`
+
+Get a single document by OpenSearch `_id`.
+
+```bash
+gulp-cli query document-get-by-id OPERATION_ID DOC_ID
+```
+
+**Arguments:**
+- `OPERATION_ID` — Target operation
+- `DOC_ID` — Document `_id`
+
+**Examples:**
+```bash
+gulp-cli query document-get-by-id incident-001 AVY84pUBM0e5DCHhCzDq
+```
+
+---
+
+#### `aggregation`
+
+Run a synchronous OpenSearch aggregation query.
+
+```bash
+gulp-cli query aggregation OPERATION_ID --q JSON
+```
+
+**Options:**
+- `--q TEXT` — Aggregation query JSON object (required)
+
+**Examples:**
+```bash
+gulp-cli query aggregation incident-001 \
+  --q '{"size":0,"aggs":{"by_event_code":{"terms":{"field":"event.code"}}}}'
+```
+
+---
+
+#### `history-get`
+
+Get query history for the authenticated user.
+
+```bash
+gulp-cli query history-get
+```
+
+**Examples:**
+```bash
+gulp-cli query history-get
+```
+
+---
+
+#### `max-min-per-field`
+
+Get max/min timeline values (`@timestamp`, `gulp.timestamp`, `event.code`) with optional grouping.
+
+```bash
+gulp-cli query max-min-per-field OPERATION_ID [OPTIONS]
+```
+
+**Options:**
+- `--flt TEXT` — `GulpQueryFilter` JSON object
+- `--group-by TEXT` — Optional group-by field (for example: `event.code`)
+
+**Examples:**
+```bash
+gulp-cli query max-min-per-field incident-001
+gulp-cli query max-min-per-field incident-001 --group-by event.code
+gulp-cli query max-min-per-field incident-001 --flt '{"source_ids":["security"]}'
+```
+
+---
+
+#### `gulp-export`
+
+Export `query_gulp` results to a local JSON file (streamed download).
+
+```bash
+gulp-cli query gulp-export OPERATION_ID --output PATH [OPTIONS]
+```
+
+**Options:**
+- `--output TEXT` — Output file path (required)
+- `--flt TEXT` — `GulpQueryFilter` JSON object
+- `--q-options TEXT` — `GulpQueryParameters` JSON object
+- `--preview` — Set `q_options.preview_mode` (ignored server-side by export API)
+- `--limit INTEGER` — Set `q_options.limit`
+- `--offset INTEGER` — Set `q_options.offset`
+
+**Examples:**
+```bash
+gulp-cli query gulp-export incident-001 \
+  --flt '{"source_ids":["security"]}' \
+  --output ./incident-001-security.json
 ```
 
 ---
@@ -597,16 +711,27 @@ gulp-cli query external OPERATION_ID [OPTIONS]
 
 **Options:**
 - `--plugin TEXT` — Plugin name (required)
-- `--plugin-params TEXT` — Plugin parameters JSON
-- `--q TEXT` — Query JSON
+- `--q TEXT` — Query payload (JSON or plain text)
+- `--plugin-params TEXT` — `GulpPluginParameters` JSON object (required)
+- `--q-options TEXT` — `GulpQueryParameters` JSON object
+- `--preview` — Enable `q_options.preview_mode=true`
+- `--limit INTEGER` — Set `q_options.limit`
+- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for completion
 
 **Examples:**
 ```bash
 gulp-cli query external my_op \
   --plugin query_elasticsearch \
-  --plugin-params '{"index":"my_index"}' \
+  --plugin-params '{"custom_parameters":{"index":"my_index"}}' \
   --q '{"query":{"match_all":{}}}'
+
+# Preview + pagination
+gulp-cli query external my_op \
+  --plugin query_elasticsearch \
+  --plugin-params '{"custom_parameters":{"index":"my_index"}}' \
+  --q '{"query":{"match":{"message":"error"}}}' \
+  --preview --limit 50 --offset 0
 ```
 
 ---
@@ -666,6 +791,91 @@ gulp-cli stats list incident-001 --all \
 
 # Faster live refresh while monitoring active ingestion
 gulp-cli stats list incident-001 --refresh-seconds 0.5
+```
+
+---
+
+#### `delete-bulk`
+
+Delete request stats using the server-side `object_delete_bulk` API.
+
+```bash
+gulp-cli stats delete-bulk OPERATION_ID [OPTIONS]
+```
+
+**Important:**
+- You must provide `--flt` or explicitly pass `--all`.
+
+**Options:**
+- `--flt TEXT` — `GulpCollabFilter` JSON object
+- `--all` — Delete all request stats in the operation
+
+**Examples:**
+```bash
+# Delete stats of a specific type
+gulp-cli stats delete-bulk incident-001 \
+  --flt '{"types":["request_stats"],"user_ids":["admin"]}'
+
+# Delete all request stats in the operation
+gulp-cli stats delete-bulk incident-001 --all
+```
+
+---
+
+#### `cancel`
+
+Cancel a running request using the server-side `request_cancel` API.
+
+```bash
+gulp-cli stats cancel REQ_ID [OPTIONS]
+```
+
+**Options:**
+- `--expire-now` — Immediately expire and delete the request stats entry after cancellation
+
+**Examples:**
+```bash
+# Cancel request and keep default grace period before cleanup
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237
+
+# Cancel and remove stats immediately
+gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237 --expire-now
+```
+
+---
+
+## Database (`db`)
+
+#### `rebase-by-query`
+
+Rebase document timestamps in-place using the server-side `rebase_by_query` API.
+
+```bash
+gulp-cli db rebase-by-query OPERATION_ID --offset-msec OFFSET [OPTIONS]
+```
+
+**Options:**
+- `--offset-msec INTEGER` — Milliseconds to add to timestamps (negative to subtract)
+- `--flt TEXT` — `GulpQueryFilter` JSON object to restrict documents
+- `--script TEXT` — Custom Painless script override
+- `--wait` — Wait for completion with websocket-driven progress
+- `--wait-timeout INTEGER` — Timeout in seconds when `--wait` is used
+
+**Examples:**
+```bash
+# Shift all documents forward by one hour
+gulp-cli db rebase-by-query incident-001 --offset-msec 3600000 --wait
+
+# Shift only Security-source documents backward by five minutes
+gulp-cli db rebase-by-query incident-001 \
+  --offset-msec -300000 \
+  --flt '{"source_ids":["security"]}' \
+  --wait
+
+# Use a custom script
+gulp-cli db rebase-by-query incident-001 \
+  --offset-msec 0 \
+  --script 'ctx._source["custom_ts"] = params.now;'
 ```
 
 ---
@@ -830,6 +1040,8 @@ gulp-cli enrich single-id my_op doc123 --plugin my_enricher
 
 ## Collaboration Objects (`collab`)
 
+Manage collaboration objects attached to an operation: notes, links, and highlights.
+
 #### `note list`
 
 List notes in operation.
@@ -839,8 +1051,74 @@ gulp-cli collab note list OPERATION_ID [OPTIONS]
 ```
 
 **Options:**
-- `--limit INTEGER` — Max results (default: 50)
-- `--flt TEXT` — Filter JSON
+- `--json` — Output raw JSON instead of the compact default table
+
+**Default columns:**
+- `id`, `operation_id`, `user_id`, `server_id`, `context_id`, `source_id`, `time_pin`, `text`
+
+**Examples:**
+```bash
+gulp-cli collab note list incident-001
+gulp-cli collab note list incident-001 --json
+```
+
+---
+
+#### `note create`
+
+Create a note for a specific context/source.
+
+```bash
+gulp-cli collab note create OPERATION_ID CONTEXT_ID SOURCE_ID NAME TEXT [OPTIONS]
+```
+
+**Important:**
+- At least one of `--time-pin` or `--doc` is required.
+
+**Options:**
+- `--tags TEXT` — Comma-separated tags
+- `--glyph-id TEXT` — Glyph ID
+- `--color TEXT` — Color string
+- `--private` — Create the note as private
+- `--time-pin INTEGER` — Time pin in nanoseconds
+- `--doc TEXT` — JSON object for associated document
+
+**Examples:**
+```bash
+# Time-pinned note
+gulp-cli collab note create incident-001 sdk_context security "Analyst note" "Suspicious login spike" \
+  --time-pin 1774626000000000000 \
+  --tags suspicious,review
+
+# Document-associated note
+gulp-cli collab note create incident-001 sdk_context security "IOC note" "Check parent process" \
+  --doc '{"_id":"doc-123","gulp.operation_id":"incident-001","gulp.source_id":"security"}'
+```
+
+---
+
+#### `note update`
+
+Update an existing note.
+
+```bash
+gulp-cli collab note update NOTE_ID [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Update note name
+- `--text TEXT` — Update note text
+- `--tags TEXT` — Replace tags with comma-separated values
+- `--glyph-id TEXT` — Update glyph ID
+- `--color TEXT` — Update color
+- `--time-pin INTEGER` — Update time pin in nanoseconds
+- `--doc TEXT` — Replace associated document with JSON object
+
+**Examples:**
+```bash
+gulp-cli collab note update note-123 --text "Updated note text" --tags reviewed,done
+gulp-cli collab note update note-123 --time-pin 1774627000000000000
+```
 
 ---
 
@@ -849,31 +1127,676 @@ gulp-cli collab note list OPERATION_ID [OPTIONS]
 Delete a note.
 
 ```bash
-gulp-cli collab note delete OPERATION_ID [OPTIONS]
+gulp-cli collab note delete NOTE_ID
 ```
 
+**Examples:**
+```bash
+gulp-cli collab note delete note-123
+```
+
+---
+
+#### `note delete-bulk`
+
+Delete multiple notes in an operation using the server-side `object_delete_bulk` API.
+
+```bash
+gulp-cli collab note delete-bulk OPERATION_ID [OPTIONS]
+```
+
+**Important:**
+- You must provide `--flt` or explicitly pass `--all`.
+
 **Options:**
-- `--note-id TEXT` — Note ID (required)
-- `--confirm` — Skip confirmation
+- `--flt TEXT` — `GulpCollabFilter` JSON object
+- `--all` — Delete all notes in the operation
+
+**Examples:**
+```bash
+# Delete notes by source and tag
+gulp-cli collab note delete-bulk incident-001 \
+  --flt '{"source_ids":["security"],"tags":["reviewed"]}'
+
+# Delete all notes in the operation
+gulp-cli collab note delete-bulk incident-001 --all
+```
 
 ---
 
 #### `link list`
 
-List links.
+List links in operation.
 
 ```bash
 gulp-cli collab link list OPERATION_ID [OPTIONS]
+```
+
+**Options:**
+- `--json` — Output raw JSON instead of the compact default table
+
+**Default columns:**
+- `id`, `operation_id`, `user_id`, `server_id`, `doc_id_from`, `doc_ids`
+
+**Examples:**
+```bash
+gulp-cli collab link list incident-001
+gulp-cli collab link list incident-001 --json
+```
+
+---
+
+#### `link create`
+
+Create a link from one document to one or more target documents.
+
+```bash
+gulp-cli collab link create OPERATION_ID DOC_ID_FROM --doc-ids DOC1,DOC2 [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Link name
+- `--description TEXT` — Link description
+- `--tags TEXT` — Comma-separated tags
+- `--glyph-id TEXT` — Glyph ID
+- `--color TEXT` — Color string
+- `--private` — Create the link as private
+
+**Examples:**
+```bash
+gulp-cli collab link create incident-001 doc-a --doc-ids doc-b,doc-c \
+  --name "lateral movement" \
+  --description "Documents connected by same process tree"
+```
+
+---
+
+#### `link update`
+
+Update an existing link.
+
+```bash
+gulp-cli collab link update LINK_ID [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Update link name
+- `--description TEXT` — Update description
+- `--tags TEXT` — Replace tags with comma-separated values
+- `--glyph-id TEXT` — Update glyph ID
+- `--color TEXT` — Update color
+- `--doc-ids TEXT` — Replace target document IDs with comma-separated values
+
+**Examples:**
+```bash
+gulp-cli collab link update link-123 --description "Updated correlation rationale"
+gulp-cli collab link update link-123 --doc-ids doc-b,doc-d
+```
+
+---
+
+#### `link delete`
+
+Delete a link.
+
+```bash
+gulp-cli collab link delete LINK_ID
+```
+
+**Examples:**
+```bash
+gulp-cli collab link delete link-123
+```
+
+---
+
+#### `link delete-bulk`
+
+Delete multiple links in an operation using the server-side `object_delete_bulk` API.
+
+```bash
+gulp-cli collab link delete-bulk OPERATION_ID [OPTIONS]
+```
+
+**Important:**
+- You must provide `--flt` or explicitly pass `--all`.
+
+**Options:**
+- `--flt TEXT` — `GulpCollabFilter` JSON object
+- `--all` — Delete all links in the operation
+
+**Examples:**
+```bash
+# Delete links that involve a specific document id
+gulp-cli collab link delete-bulk incident-001 \
+  --flt '{"doc_ids":["doc-a"]}'
+
+# Delete all links in the operation
+gulp-cli collab link delete-bulk incident-001 --all
 ```
 
 ---
 
 #### `highlight list`
 
-List highlights.
+List highlights in operation.
 
 ```bash
 gulp-cli collab highlight list OPERATION_ID [OPTIONS]
+```
+
+**Options:**
+- `--json` — Output raw JSON instead of the compact default table
+
+**Default columns:**
+- `id`, `operation_id`, `user_id`, `server_id`, `time_range`
+
+**Examples:**
+```bash
+gulp-cli collab highlight list incident-001
+gulp-cli collab highlight list incident-001 --json
+```
+
+---
+
+#### `highlight create`
+
+Create a highlight over a time range.
+
+```bash
+gulp-cli collab highlight create OPERATION_ID --time-range START_NS,END_NS [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Highlight name
+- `--description TEXT` — Description
+- `--tags TEXT` — Comma-separated tags
+- `--glyph-id TEXT` — Glyph ID
+- `--color TEXT` — Color string
+- `--private` — Create the highlight as private
+
+**Examples:**
+```bash
+gulp-cli collab highlight create incident-001 \
+  --time-range 1774626000000000000,1774626060000000000 \
+  --name "Burst of activity" \
+  --color red
+```
+
+---
+
+#### `highlight update`
+
+Update an existing highlight.
+
+```bash
+gulp-cli collab highlight update HIGHLIGHT_ID [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Update highlight name
+- `--description TEXT` — Update description
+- `--tags TEXT` — Replace tags with comma-separated values
+- `--glyph-id TEXT` — Update glyph ID
+- `--color TEXT` — Update color
+- `--time-range TEXT` — Replace time range using `START_NS,END_NS`
+
+**Examples:**
+```bash
+gulp-cli collab highlight update hl-123 --time-range 1774626000000000000,1774626120000000000
+gulp-cli collab highlight update hl-123 --description "Expanded reviewed window"
+```
+
+---
+
+#### `highlight delete`
+
+Delete a highlight.
+
+```bash
+gulp-cli collab highlight delete HIGHLIGHT_ID
+```
+
+**Examples:**
+```bash
+gulp-cli collab highlight delete hl-123
+```
+
+---
+
+#### `highlight delete-bulk`
+
+Delete multiple highlights in an operation using the server-side `object_delete_bulk` API.
+
+```bash
+gulp-cli collab highlight delete-bulk OPERATION_ID [OPTIONS]
+```
+
+**Important:**
+- You must provide `--flt` or explicitly pass `--all`.
+
+**Options:**
+- `--flt TEXT` — `GulpCollabFilter` JSON object
+- `--all` — Delete all highlights in the operation
+
+**Examples:**
+```bash
+# Delete highlights in a creation-time window
+gulp-cli collab highlight delete-bulk incident-001 \
+  --flt '{"time_created_range":[1774626000000,1774629600000]}'
+
+# Delete all highlights in the operation
+gulp-cli collab highlight delete-bulk incident-001 --all
+```
+
+---
+
+#### `db list-indexes`
+
+List all OpenSearch datastreams/indexes (admin required).
+
+```bash
+gulp-cli db list-indexes [OPTIONS]
+```
+
+**Options:**
+- `--json` — Output raw JSON
+
+**Examples:**
+```bash
+gulp-cli db list-indexes
+gulp-cli db list-indexes --json
+```
+
+---
+
+#### `db refresh-index`
+
+Refresh an OpenSearch index so newly ingested documents become searchable (ingest permission required).
+
+```bash
+gulp-cli db refresh-index INDEX
+```
+
+**Arguments:**
+- `INDEX` — Index / datastream name (usually the operation ID)
+
+**Examples:**
+```bash
+gulp-cli db refresh-index incident-001
+```
+
+---
+
+#### `db delete-index`
+
+Delete an OpenSearch datastream/index and (by default) its associated collab operation.
+
+**WARNING:** all document data in the index will be permanently lost.
+
+```bash
+gulp-cli db delete-index INDEX [OPTIONS]
+```
+
+**Arguments:**
+- `INDEX` — Index / datastream name
+
+**Options:**
+- `--keep-operation` — Do NOT delete the corresponding collab operation
+- `--yes / -y` — Skip the confirmation prompt
+
+**Examples:**
+```bash
+# Interactive confirmation
+gulp-cli db delete-index incident-001
+
+# Delete index only, keep the operation
+gulp-cli db delete-index incident-001 --keep-operation --yes
+
+# Non-interactive (CI/scripts)
+gulp-cli db delete-index incident-001 --yes
+```
+
+---
+
+## User Group Management (`user-group`)
+
+All commands require **admin** permission.
+
+#### `user-group list`
+
+List user groups.
+
+```bash
+gulp-cli user-group list [OPTIONS]
+```
+
+**Options:**
+- `--flt TEXT` — `GulpCollabFilter` JSON for filtering
+- `--json` — Output raw JSON
+
+**Examples:**
+```bash
+gulp-cli user-group list
+gulp-cli user-group list --json
+gulp-cli user-group list --flt '{"names":["analysts"]}'
+```
+
+---
+
+#### `user-group get`
+
+Get a user group by ID.
+
+```bash
+gulp-cli user-group get GROUP_ID
+```
+
+**Examples:**
+```bash
+gulp-cli user-group get analysts
+```
+
+---
+
+#### `user-group create`
+
+Create a new user group.
+
+```bash
+gulp-cli user-group create NAME --permission PERMS [OPTIONS]
+```
+
+**Arguments:**
+- `NAME` — Group name (also used as ID)
+
+**Options:**
+- `--permission TEXT` — Comma-separated permissions: `read`, `edit`, `ingest`, `admin` (required)
+- `--description / -d TEXT` — Optional description
+- `--glyph-id TEXT` — Optional glyph ID
+
+**Examples:**
+```bash
+gulp-cli user-group create analysts --permission read,edit
+gulp-cli user-group create ingestors --permission read,edit,ingest --description "Can run ingestion"
+```
+
+---
+
+#### `user-group update`
+
+Update a user group's properties.
+
+```bash
+gulp-cli user-group update GROUP_ID [OPTIONS]
+```
+
+**Options:**
+- `--permission TEXT` — New comma-separated permissions
+- `--description / -d TEXT` — New description
+- `--glyph-id TEXT` — New glyph ID
+
+**Examples:**
+```bash
+gulp-cli user-group update analysts --permission read,edit,ingest
+gulp-cli user-group update analysts --description "Read + edit + ingest access"
+```
+
+---
+
+#### `user-group delete`
+
+Delete a user group. Members are **not** deleted.
+
+```bash
+gulp-cli user-group delete GROUP_ID
+```
+
+**Examples:**
+```bash
+gulp-cli user-group delete analysts
+```
+
+---
+
+#### `user-group add-user`
+
+Add a user to a group.
+
+```bash
+gulp-cli user-group add-user GROUP_ID USER_ID
+```
+
+**Examples:**
+```bash
+gulp-cli user-group add-user analysts alice
+```
+
+---
+
+#### `user-group remove-user`
+
+Remove a user from a group.
+
+```bash
+gulp-cli user-group remove-user GROUP_ID USER_ID
+```
+
+**Examples:**
+```bash
+gulp-cli user-group remove-user analysts alice
+```
+
+---
+
+## Object ACL Management (`acl`)
+
+Manage access control for collaboration objects. The caller must be the object **owner** or have **admin** permission.
+
+#### `acl add-user`
+
+Grant a specific user access to an object.
+
+```bash
+gulp-cli acl add-user OBJ_ID --obj-type TYPE --user-id USER_ID
+```
+
+**Arguments:**
+- `OBJ_ID` — ID of the object
+
+**Options:**
+- `--obj-type TEXT` — Object collab type (e.g. `note`, `operation`, `link`, `highlight`) (required)
+- `--user-id TEXT` — User ID to grant access (required)
+
+**Examples:**
+```bash
+gulp-cli acl add-user note-123 --obj-type note --user-id alice
+gulp-cli acl add-user incident-001 --obj-type operation --user-id alice
+```
+
+---
+
+#### `acl remove-user`
+
+Revoke a user's access to an object.
+
+```bash
+gulp-cli acl remove-user OBJ_ID --obj-type TYPE --user-id USER_ID
+```
+
+**Examples:**
+```bash
+gulp-cli acl remove-user note-123 --obj-type note --user-id alice
+```
+
+---
+
+#### `acl add-group`
+
+Grant a group access to an object.
+
+```bash
+gulp-cli acl add-group OBJ_ID --obj-type TYPE --group-id GROUP_ID
+```
+
+**Options:**
+- `--obj-type TEXT` — Object collab type (required)
+- `--group-id TEXT` — Group ID to grant access (required)
+
+**Examples:**
+```bash
+gulp-cli acl add-group incident-001 --obj-type operation --group-id analysts
+gulp-cli acl add-group note-123 --obj-type note --group-id analysts
+```
+
+---
+
+#### `acl remove-group`
+
+Revoke a group's access to an object.
+
+```bash
+gulp-cli acl remove-group OBJ_ID --obj-type TYPE --group-id GROUP_ID
+```
+
+**Examples:**
+```bash
+gulp-cli acl remove-group incident-001 --obj-type operation --group-id analysts
+```
+
+---
+
+#### `acl make-private`
+
+Make an object private. Only the owner and admins will be able to access it.
+
+```bash
+gulp-cli acl make-private OBJ_ID --obj-type TYPE
+```
+
+**Examples:**
+```bash
+gulp-cli acl make-private note-123 --obj-type note
+gulp-cli acl make-private link-456 --obj-type link
+```
+
+---
+
+#### `acl make-public`
+
+Make an object public (accessible by everyone). Clears all explicit grants.
+
+```bash
+gulp-cli acl make-public OBJ_ID --obj-type TYPE
+```
+
+**Examples:**
+```bash
+gulp-cli acl make-public note-123 --obj-type note
+```
+
+---
+
+## Storage Management (`storage`)
+
+Manage files on the S3-compatible filestore.
+
+#### `storage list-files`
+
+List files from storage, optionally filtered by operation/context.
+
+```bash
+gulp-cli storage list-files [OPTIONS]
+```
+
+**Options:**
+- `--operation-id TEXT` — Filter by operation ID
+- `--context-id TEXT` — Filter by context ID
+- `--continuation-token TEXT` — Pagination token from previous response
+- `--max-results INTEGER` — Results per page (default: `100`, max: `1000`)
+- `--json` — Output raw JSON
+
+**Examples:**
+```bash
+# List files for one operation
+gulp-cli storage list-files --operation-id incident-001
+
+# Paginate next page
+gulp-cli storage list-files --operation-id incident-001 --continuation-token abc123
+
+# Global list (admin)
+gulp-cli storage list-files --json
+```
+
+---
+
+#### `storage get-file`
+
+Download a file by storage ID.
+
+```bash
+gulp-cli storage get-file OPERATION_ID STORAGE_ID --output PATH
+```
+
+**Arguments:**
+- `OPERATION_ID` — Operation ID used for permission check
+- `STORAGE_ID` — Storage ID (`gulp.storage_id`)
+
+**Options:**
+- `--output TEXT` — Local output file path (required)
+
+**Examples:**
+```bash
+gulp-cli storage get-file incident-001 \
+  incident-001/context-a/source-security/System.evtx \
+  --output ./downloads/System.evtx
+```
+
+---
+
+#### `storage delete-by-id`
+
+Delete a single storage file by storage ID.
+
+```bash
+gulp-cli storage delete-by-id OPERATION_ID STORAGE_ID
+```
+
+**Examples:**
+```bash
+gulp-cli storage delete-by-id incident-001 \
+  incident-001/context-a/source-security/System.evtx
+```
+
+---
+
+#### `storage delete-by-tags`
+
+Delete storage files by operation/context tags.
+
+```bash
+gulp-cli storage delete-by-tags [OPTIONS]
+```
+
+**Important:**
+- Provide at least one filter (`--operation-id` and/or `--context-id`) or explicitly pass `--all`.
+
+**Options:**
+- `--operation-id TEXT` — Filter by operation ID
+- `--context-id TEXT` — Filter by context ID
+- `--all` — Delete across all operations/contexts
+- `--yes / -y` — Skip confirmation prompt when using `--all`
+
+**Examples:**
+```bash
+# Delete all files in one operation
+gulp-cli storage delete-by-tags --operation-id incident-001
+
+# Delete by operation + context
+gulp-cli storage delete-by-tags --operation-id incident-001 --context-id sdk_context
+
+# Global delete (dangerous)
+gulp-cli storage delete-by-tags --all --yes
 ```
 
 ---
