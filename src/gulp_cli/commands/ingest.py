@@ -3,73 +3,248 @@ from __future__ import annotations
 import asyncio
 from glob import glob
 from pathlib import Path
+from typing import Any
 
 import typer
+from gulp_sdk.websocket import WSMessage, WSMessageType
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 
 from gulp_cli.client import get_client
-from gulp_cli.output import print_error, print_json
+from gulp_cli.output import console, print_error, print_json, print_warning
 from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Ingestion commands")
+
+# How long to keep the websocket alive waiting for STATS_CREATE confirmation
+# when --wait is NOT used.  Should be well above the worker task-scheduling lag.
+_WS_CONFIRM_TIMEOUT_SEC = 30.0
+
+
+async def _wait_for_stats_create(
+    client: Any,
+    req_ids: list[str],
+    timeout: float = _WS_CONFIRM_TIMEOUT_SEC,
+) -> list[str]:
+    """Keep the websocket alive until a STATS_CREATE (or STATS_UPDATE) event is
+    received for every *req_id* in the list.
+
+    This is the websocket-native replacement for HTTP polling: the backend
+    publishes STATS_CREATE the moment it creates the GulpRequestStats object,
+    which is the very first thing a worker does.  Receiving that event proves
+    the websocket was alive when the backend needed it.
+
+    Returns the list of req_ids that did NOT receive confirmation within *timeout*.
+    """
+    req_ids = [r for r in req_ids if r]
+    if not req_ids:
+        return []
+
+    ws = await client.ensure_websocket()
+
+    # One asyncio.Event per req_id; we set it on any STATS_CREATE/STATS_UPDATE
+    # message that carries the matching req_id.
+    events: dict[str, asyncio.Event] = {req_id: asyncio.Event() for req_id in req_ids}
+
+    async def _on_stats(msg: WSMessage) -> None:
+        ev = events.get(msg.req_id)
+        if ev is not None:
+            ev.set()
+
+    ws.on_message(WSMessageType.STATS_CREATE, _on_stats)
+    ws.on_message(WSMessageType.STATS_UPDATE, _on_stats)
+
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*[ev.wait() for ev in events.values()]),
+            timeout=timeout,
+        )
+        return []
+    except asyncio.TimeoutError:
+        return [rid for rid, ev in events.items() if not ev.is_set()]
+    finally:
+        ws.off_message(WSMessageType.STATS_CREATE, _on_stats)
+        ws.off_message(WSMessageType.STATS_UPDATE, _on_stats)
+
+
+async def _wait_for_completion(
+    client: Any,
+    file_req_map: dict[str, str],
+    timeout: int,
+) -> list[dict[str, Any]]:
+    """Wait for every ingest request to reach a terminal status via websocket.
+
+    Uses the SDK's ``wait_for_request_stats`` which is WS-first and only falls
+    back to polling if the websocket is unavailable.
+
+    Returns a list of result dicts (one per file) with final status.
+    """
+    from gulp_sdk.api.request_utils import wait_for_request_stats
+
+    ws = await client.ensure_websocket()
+
+    results: list[dict[str, Any]] = []
+    # Rich progress bar: one task per file
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        task_ids: dict[str, Any] = {}
+        for file_path, req_id in file_req_map.items():
+            task_ids[req_id] = progress.add_task(
+                Path(file_path).name, total=None
+            )
+
+        def _make_ws_callback(req_id: str):
+            def _cb(msg: WSMessage) -> None:
+                tid = task_ids.get(req_id)
+                if tid is None:
+                    return
+                if msg.type == WSMessageType.INGEST_SOURCE_DONE.value:
+                    ingested = 0
+                    if isinstance(msg.data, dict):
+                        obj = msg.data.get("obj", msg.data)
+                        if isinstance(obj, dict):
+                            ingested = obj.get("records_ingested", 0) or 0
+                    progress.update(tid, description=f"{Path(list(file_req_map.keys())[list(file_req_map.values()).index(req_id)]).name} ({ingested} docs)")
+                elif msg.type in (WSMessageType.STATS_UPDATE.value, WSMessageType.STATS_CREATE.value):
+                    if isinstance(msg.data, dict):
+                        obj = msg.data.get("obj", msg.data)
+                        if isinstance(obj, dict):
+                            pct = obj.get("ingest_percentage", None)
+                            if pct is not None:
+                                progress.update(tid, completed=pct, total=100)
+            return _cb
+
+        wait_tasks = [
+            wait_for_request_stats(
+                client,
+                req_id,
+                timeout,
+                ws_callback=_make_ws_callback(req_id),
+            )
+            for req_id in file_req_map.values()
+        ]
+        stats_list = await asyncio.gather(*wait_tasks, return_exceptions=True)
+
+        for (file_path, req_id), stat in zip(file_req_map.items(), stats_list):
+            if isinstance(stat, BaseException):
+                results.append({"file": file_path, "req_id": req_id, "status": "error", "error": str(stat)})
+            elif isinstance(stat, dict):
+                results.append({"file": file_path, "req_id": req_id, "status": stat.get("status", "unknown")})
+            else:
+                results.append({"file": file_path, "req_id": req_id, "status": "unknown"})
+
+    return results
 
 
 @app.command("file")
 def ingest_file(
     operation_id: str,
     plugin: str,
-    file_patterns: list[str] = typer.Argument(..., help="One or more files or glob patterns to ingest (e.g. '*.evtx', '/path/to/dir/*')"),
+    file_patterns: list[str] = typer.Argument(
+        ...,
+        help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
+    ),
     context_name: str = typer.Option("sdk_context", "--context-name"),
     plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params"),
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
-    wait: bool = typer.Option(False, "--wait"),
+    wait: bool = typer.Option(
+        False,
+        "--wait",
+        help=(
+            "Wait for all ingestions to complete (WS-driven progress bar). "
+            "Without this flag the CLI returns as soon as the backend confirms "
+            "reception of each request via STATS_CREATE websocket event."
+        ),
+    ),
+    wait_timeout: int = typer.Option(300, "--wait-timeout", help="Seconds to wait for completion (only used with --wait)"),
 ) -> None:
-    """Ingest one or more files using glob patterns for wildcard matching."""
-    
-    # Expand glob patterns to actual files
+    """Ingest one or more files (supports glob patterns).
+
+    By default the command returns once the backend has confirmed every request
+    via a STATS_CREATE websocket notification — no HTTP polling.  Pass --wait
+    to block until ingestion fully completes, with a live progress bar.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Expand glob patterns                                                 #
+    # ------------------------------------------------------------------ #
     expanded_files: list[str] = []
     for pattern in file_patterns:
-        matches = glob(pattern, recursive=True)
-        if not matches:
-            # If no matches, treat as literal file path (may not exist, server will error)
-            expanded_files.append(pattern)
+        matches = sorted(glob(pattern, recursive=True))
+        if matches:
+            expanded_files.extend(matches)
         else:
-            expanded_files.extend(sorted(matches))
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_files = []
+            # Treat as literal path; server will report the error
+            expanded_files.append(pattern)
+
+    seen: set[str] = set()
+    unique_files: list[str] = []
     for f in expanded_files:
         if f not in seen:
             seen.add(f)
             unique_files.append(f)
-    
+
     if not unique_files:
         print_error("No files found matching the provided patterns.")
         raise typer.Exit(1)
-    
-    async def _ingest_one(file_path: str) -> dict:
-        params = {
-            "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
-            "flt": parse_json_option(flt, field_name="flt") or {},
-            "original_file_path": str(Path(file_path).resolve()),
-        }
+
+    # ------------------------------------------------------------------ #
+    # Async runner                                                         #
+    # ------------------------------------------------------------------ #
+    async def _run() -> None:
         async with get_client() as client:
-            result = await client.ingest.file(
-                operation_id=operation_id,
-                plugin_name=plugin,
-                file_path=file_path,
-                context_name=context_name,
-                params=params,
-                wait=wait,
-            )
-            return {
-                "file": file_path,
-                "req_id": result.req_id,
-                "status": result.status,
+            # Establish WS BEFORE any ingest call so ws_id is live when the
+            # worker tries to publish its first STATS_CREATE event.
+            await client.ensure_websocket()
+
+            params = {
+                "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
+                "flt": parse_json_option(flt, field_name="flt") or {},
             }
 
-    async def _run() -> None:
-        results = await asyncio.gather(*[_ingest_one(path) for path in unique_files])
-        print_json(results)
+            async def _fire_one(file_path: str) -> tuple[str, str]:
+                """Submit ingestion for one file; returns (file_path, req_id)."""
+                result = await client.ingest.file(
+                    operation_id=operation_id,
+                    plugin_name=plugin,
+                    file_path=file_path,
+                    context_name=context_name,
+                    params={**params, "original_file_path": str(Path(file_path).resolve())},
+                    wait=False,  # we handle waiting ourselves below
+                )
+                return file_path, result.req_id
+
+            # Fire all requests concurrently
+            fired: list[tuple[str, str]] = await asyncio.gather(
+                *[_fire_one(path) for path in unique_files]
+            )
+            file_req_map: dict[str, str] = dict(fired)
+
+            if wait:
+                # --wait: block until terminal status via websocket
+                results = await _wait_for_completion(client, file_req_map, wait_timeout)
+            else:
+                # Default: keep websocket alive until backend confirms every
+                # request as registered (STATS_CREATE event per req_id).
+                req_ids = list(file_req_map.values())
+                timed_out = await _wait_for_stats_create(client, req_ids)
+                if timed_out:
+                    print_warning(
+                        f"{len(timed_out)} request(s) did not receive STATS_CREATE "
+                        f"within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s — backend may still be processing: "
+                        + ", ".join(timed_out)
+                    )
+                results = [
+                    {"file": fp, "req_id": rid, "status": "pending"}
+                    for fp, rid in file_req_map.items()
+                ]
+
+            print_json(results)
 
     asyncio.run(_run())
