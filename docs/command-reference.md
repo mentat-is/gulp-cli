@@ -376,6 +376,7 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
+- `--reset-operation` — Delete and recreate the operation before ingest starts
 - `--preview` — Run preview-only ingestion (no persistence)
 - `--wait` — Wait for completion with progress
 - `--wait-timeout INTEGER` — Timeout in seconds for `--wait` mode
@@ -399,6 +400,9 @@ gulp-cli ingest file my_op csv file.csv --plugin-params '{"delimiter":";","encod
 
 # Preview mode (no ingestion persisted)
 gulp-cli ingest file my_op win_evtx /path/to/System.evtx --preview
+
+# Reset operation data before ingest (destructive for collab/request data)
+gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --reset-operation
 
 # Wait for completion
 gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --wait
@@ -1811,6 +1815,32 @@ List all plugins.
 gulp-cli plugin list [OPTIONS]
 ```
 
+**Options:**
+- `--plugin-type [extension|external|ingestion|enrichment]` — Filter plugins by functional type
+
+**Examples:**
+```bash
+# List only ingestion plugins
+gulp-cli plugin list --plugin-type ingestion
+
+# List only enrichment plugins
+gulp-cli plugin list --plugin-type enrichment
+
+# List only extension plugins
+gulp-cli plugin list --plugin-type extension
+
+# List only external/query plugins
+gulp-cli plugin list --plugin-type external
+```
+
+#### `plugin list-ui`
+
+List UI plugins.
+
+```bash
+gulp-cli plugin list-ui [OPTIONS]
+```
+
 ---
 
 #### `plugin upload`
@@ -1821,6 +1851,22 @@ Upload a new plugin.
 gulp-cli plugin upload PLUGIN_FILE [OPTIONS]
 ```
 
+#### `plugin download`
+
+Download a plugin.
+
+```bash
+gulp-cli plugin download FILENAME OUTPUT_PATH [OPTIONS]
+```
+
+#### `plugin delete`
+
+Delete a plugin.
+
+```bash
+gulp-cli plugin delete FILENAME [OPTIONS]
+```
+
 ---
 
 #### `mapping list`
@@ -1829,6 +1875,102 @@ List all mapping files.
 
 ```bash
 gulp-cli mapping list [OPTIONS]
+```
+
+#### `mapping upload`
+
+Upload a mapping file.
+
+```bash
+gulp-cli mapping upload FILE_PATH [OPTIONS]
+```
+
+#### `mapping download`
+
+Download a mapping file.
+
+```bash
+gulp-cli mapping download FILENAME OUTPUT_PATH [OPTIONS]
+```
+
+#### `mapping delete`
+
+Delete a mapping file.
+
+```bash
+gulp-cli mapping delete FILENAME [OPTIONS]
+```
+
+---
+
+## Enhance Map Management (`enhance-map`)
+
+Map `gulp.event_code` values per plugin to a glyph and/or color used by the UI.
+
+#### `enhance-map create`
+
+```bash
+gulp-cli enhance-map create GULP_EVENT_CODE PLUGIN [--glyph-id GLYPH_ID] [--color COLOR]
+```
+
+#### `enhance-map update`
+
+```bash
+gulp-cli enhance-map update OBJ_ID [--glyph-id GLYPH_ID] [--color COLOR]
+```
+
+#### `enhance-map delete`
+
+```bash
+gulp-cli enhance-map delete OBJ_ID
+```
+
+#### `enhance-map get`
+
+```bash
+gulp-cli enhance-map get OBJ_ID
+```
+
+#### `enhance-map list`
+
+```bash
+gulp-cli enhance-map list [--flt '{"plugin":"win_evtx"}']
+```
+
+---
+
+## Glyph Management (`glyph`)
+
+Create and manage glyph objects used in collaboration and enhance mappings.
+
+#### `glyph create`
+
+```bash
+gulp-cli glyph create [--img-path ./icon.png] [--name GLYPH_NAME] [--private]
+```
+
+#### `glyph update`
+
+```bash
+gulp-cli glyph update OBJ_ID [--name NEW_NAME] [--img-path ./icon_new.png]
+```
+
+#### `glyph delete`
+
+```bash
+gulp-cli glyph delete OBJ_ID
+```
+
+#### `glyph get`
+
+```bash
+gulp-cli glyph get OBJ_ID
+```
+
+#### `glyph list`
+
+```bash
+gulp-cli glyph list [--flt '{"private":false}']
 ```
 
 ---

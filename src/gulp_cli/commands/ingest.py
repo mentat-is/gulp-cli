@@ -10,7 +10,7 @@ from gulp_sdk.websocket import WSMessage, WSMessageType
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 
 from gulp_cli.client import get_client
-from gulp_cli.output import console, print_error, print_json, print_warning
+from gulp_cli.output import console, print_error, print_json, print_result, print_warning
 from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Ingestion commands")
@@ -70,6 +70,7 @@ async def _wait_for_completion(
     client: Any,
     file_req_map: dict[str, str],
     timeout: int,
+    verbose: bool,
 ) -> list[dict[str, Any]]:
     """Wait for every ingest request to reach a terminal status via websocket.
 
@@ -135,7 +136,10 @@ async def _wait_for_completion(
             if isinstance(stat, BaseException):
                 results.append({"file": file_path, "req_id": req_id, "status": "error", "error": str(stat)})
             elif isinstance(stat, dict):
-                results.append({"file": file_path, "req_id": req_id, "status": stat.get("status", "unknown")})
+                if verbose:
+                    results.append({"file": file_path, "req_id": req_id, "result": stat})
+                else:
+                    results.append({"file": file_path, "req_id": req_id, "status": stat.get("status", "unknown")})
             else:
                 results.append({"file": file_path, "req_id": req_id, "status": "unknown"})
 
@@ -153,6 +157,11 @@ def ingest_file(
     context_name: str = typer.Option("sdk_context", "--context-name"),
     plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params"),
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
+    reset_operation: bool = typer.Option(
+        False,
+        "--reset-operation",
+        help="Delete and recreate the operation before ingest starts",
+    ),
     preview: bool = typer.Option(
         False,
         "--preview",
@@ -168,6 +177,11 @@ def ingest_file(
         ),
     ),
     wait_timeout: int = typer.Option(300, "--wait-timeout", help="Seconds to wait for completion (only used with --wait)"),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Print complete result JSON instead of summary",
+    ),
 ) -> None:
     """Ingest one or more files (supports glob patterns).
 
@@ -205,6 +219,8 @@ def ingest_file(
     async def _run() -> None:
         if preview and wait:
             raise typer.BadParameter("--preview and --wait are mutually exclusive")
+        if preview and reset_operation:
+            raise typer.BadParameter("--preview and --reset-operation are mutually exclusive")
 
         async with get_client() as client:
             # Establish WS BEFORE any ingest call so ws_id is live when the
@@ -231,11 +247,19 @@ def ingest_file(
                         },
                     )
                     previews.append({"file": file_path, "preview": data})
-                print_json(previews)
+                print_result(previews, verbose=verbose)
                 return
 
-            async def _fire_one(file_path: str) -> tuple[str, str]:
-                """Submit ingestion for one file; returns (file_path, req_id)."""
+            if reset_operation:
+                await client.operations.delete(operation_id)
+                op = await client.operations.create(name=operation_id)
+                if not verbose:
+                    print_warning(
+                        f"Operation {operation_id} reset (deleted and recreated)."
+                    )
+
+            async def _fire_one(file_path: str) -> tuple[str, str, dict[str, Any]]:
+                """Submit ingestion for one file; returns (file_path, req_id, submission)."""
                 result = await client.ingest.file(
                     operation_id=operation_id,
                     plugin_name=plugin,
@@ -244,33 +268,50 @@ def ingest_file(
                     params={**params, "original_file_path": str(Path(file_path).resolve())},
                     wait=False,  # we handle waiting ourselves below
                 )
-                return file_path, result.req_id
+                if hasattr(result, "model_dump"):
+                    submission = result.model_dump(exclude_none=True)
+                else:
+                    submission = {"req_id": getattr(result, "req_id", None)}
+                req_id = str(submission.get("req_id") or "")
+                return file_path, req_id, submission
 
             # Fire all requests concurrently
-            fired: list[tuple[str, str]] = await asyncio.gather(
+            fired: list[tuple[str, str, dict[str, Any]]] = await asyncio.gather(
                 *[_fire_one(path) for path in unique_files]
             )
-            file_req_map: dict[str, str] = dict(fired)
+            file_req_map: dict[str, str] = {file_path: req_id for file_path, req_id, _ in fired}
+            fired_meta: dict[str, dict[str, Any]] = {req_id: payload for _, req_id, payload in fired if req_id}
 
             if wait:
                 # --wait: block until terminal status via websocket
-                results = await _wait_for_completion(client, file_req_map, wait_timeout)
+                results = await _wait_for_completion(client, file_req_map, wait_timeout, verbose)
             else:
                 # Default: keep websocket alive until backend confirms every
                 # request as registered (STATS_CREATE event per req_id).
                 req_ids = list(file_req_map.values())
                 timed_out = await _wait_for_stats_create(client, req_ids)
-                if timed_out:
+                if timed_out and not verbose:
                     print_warning(
                         f"{len(timed_out)} request(s) did not receive STATS_CREATE "
                         f"within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s — backend may still be processing: "
                         + ", ".join(timed_out)
                     )
-                results = [
-                    {"file": fp, "req_id": rid, "status": "pending"}
-                    for fp, rid in file_req_map.items()
-                ]
+                if verbose:
+                    results = [
+                        {
+                            "file": fp,
+                            "req_id": rid,
+                            "submitted": fired_meta.get(rid, {"req_id": rid}),
+                            "ws_confirmed": rid not in timed_out,
+                        }
+                        for fp, rid in file_req_map.items()
+                    ]
+                else:
+                    results = [
+                        {"file": fp, "req_id": rid, "status": "pending"}
+                        for fp, rid in file_req_map.items()
+                    ]
 
-            print_json(results)
+            print_result(results, verbose=verbose)
 
     asyncio.run(_run())

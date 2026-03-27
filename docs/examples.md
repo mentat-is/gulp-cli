@@ -31,6 +31,9 @@ gulp-cli auth logout
 ```bash
 # Ingest one event log
 gulp-cli ingest file incident-001 win_evtx /path/to/System.evtx
+
+# Optional: delete and recreate operation before ingestion
+gulp-cli ingest file incident-001 win_evtx /path/to/System.evtx --reset-operation
 ```
 
 ### Bulk File Ingestion with Wildcard
@@ -878,6 +881,52 @@ gulp-cli storage delete-by-tags --operation-id incident-001 --context-id sdk_con
 
 # Global cleanup (dangerous)
 gulp-cli storage delete-by-tags --all --yes
+```
+
+---
+
+## Enhance Map and Glyph Workflows
+
+### Create and Assign Custom Glyphs
+
+```bash
+# Create a glyph from a local icon
+gulp-cli glyph create --img-path ./icons/logon.png --name glyph_logon
+
+# List glyphs to get obj ids
+gulp-cli glyph list
+
+# Update glyph name
+gulp-cli glyph update <glyph_obj_id> --name glyph_logon_v2
+```
+
+### Map Event Codes to Glyph/Color
+
+```bash
+# Map successful logon events to green
+gulp-cli enhance-map create 4624 win_evtx --color '#00cc66'
+
+# Map failed logon events to red + custom glyph
+gulp-cli enhance-map create 4625 win_evtx --color '#ff3300' --glyph-id glyph_logon_v2
+
+# List current mappings
+gulp-cli enhance-map list
+
+# Filter mappings by plugin
+gulp-cli enhance-map list --flt '{"plugin":"win_evtx"}'
+```
+
+### Change or Remove a Mapping
+
+```bash
+# Change visual color for an existing mapping
+gulp-cli enhance-map update <enhance_map_obj_id> --color '#ffaa00'
+
+# Get one mapping by id
+gulp-cli enhance-map get <enhance_map_obj_id>
+
+# Delete mapping when no longer needed
+gulp-cli enhance-map delete <enhance_map_obj_id>
 ```
 
 ---

@@ -7,7 +7,7 @@ from typing import Any
 import typer
 
 from gulp_cli.client import get_client
-from gulp_cli.output import print_error, print_json, print_records
+from gulp_cli.output import print_error, print_json, print_records, print_result
 from gulp_cli.utils import comma_split, parse_json_option
 
 app = typer.Typer(help="Collaboration objects commands")
@@ -105,6 +105,7 @@ async def _bulk_delete(
     obj_type: str,
     flt_raw: str | None,
     delete_all: bool,
+    verbose: bool,
 ) -> None:
     if not delete_all and not flt_raw:
         raise typer.BadParameter("Provide --flt or pass --all to delete all matching objects of this type in the operation")
@@ -116,7 +117,7 @@ async def _bulk_delete(
             obj_type=obj_type,
             flt=flt,
         )
-        print_json(deleted)
+        print_result(deleted, verbose=verbose)
 
 
 @note_app.command("create")
@@ -132,6 +133,7 @@ def note_create(
     private: bool = typer.Option(False, "--private"),
     time_pin: int | None = typer.Option(None, "--time-pin", help="Time pin in ns (required if --doc is not provided)"),
     doc: str | None = typer.Option(None, "--doc", help="JSON object for associated document (required if --time-pin is not provided)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         if time_pin is None and doc is None:
@@ -153,7 +155,7 @@ def note_create(
                 time_pin=time_pin,
                 doc=doc_obj,
             )
-            print_json(created)
+            print_result(created, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -168,6 +170,7 @@ def note_update(
     color: str | None = typer.Option(None, "--color"),
     time_pin: int | None = typer.Option(None, "--time-pin", help="Time pin in ns"),
     doc: str | None = typer.Option(None, "--doc", help="JSON object for associated document"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         if all(
@@ -192,18 +195,21 @@ def note_update(
                 time_pin=time_pin,
                 doc=doc_obj,
             )
-            print_json(updated)
+            print_result(updated, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @note_app.command("delete")
-def note_delete(obj_id: str) -> None:
+def note_delete(
+    obj_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     async def _run() -> None:
         async with get_client() as client:
             await client.ensure_websocket()
             deleted = await client.collab.note_delete(obj_id=obj_id)
-            print_json(deleted)
+            print_result(deleted, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -213,22 +219,24 @@ def note_delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
     delete_all: bool = typer.Option(False, "--all", help="Delete all notes in the operation (dangerous)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
-    asyncio.run(_bulk_delete(operation_id, "note", flt, delete_all))
+    asyncio.run(_bulk_delete(operation_id, "note", flt, delete_all, verbose))
 
 
 @note_app.command("list")
 def note_list(
     operation_id: str,
     as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             records = await client.collab.note_list(operation_id=operation_id)
             if as_json:
-                print_json(records)
+                print_result(records, verbose=verbose)
             else:
-                print_records(_note_rows(records), title="Notes")
+                print_result(_note_rows(records), verbose=verbose, formatter=lambda d: print_records(d, title="Notes"))
 
     asyncio.run(_run())
 
@@ -244,6 +252,7 @@ def link_create(
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
     color: str | None = typer.Option(None, "--color"),
     private: bool = typer.Option(False, "--private"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         parsed_doc_ids = comma_split(doc_ids)
@@ -263,7 +272,7 @@ def link_create(
                 color=color,
                 private=private,
             )
-            print_json(created)
+            print_result(created, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -277,6 +286,7 @@ def link_update(
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
     color: str | None = typer.Option(None, "--color"),
     doc_ids: str | None = typer.Option(None, "--doc-ids", help="Comma-separated target document IDs"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         if all(
@@ -300,18 +310,21 @@ def link_update(
                 color=color,
                 doc_ids=parsed_doc_ids,
             )
-            print_json(updated)
+            print_result(updated, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @link_app.command("delete")
-def link_delete(obj_id: str) -> None:
+def link_delete(
+    obj_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     async def _run() -> None:
         async with get_client() as client:
             await client.ensure_websocket()
             deleted = await client.collab.link_delete(obj_id=obj_id)
-            print_json(deleted)
+            print_result(deleted, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -321,22 +334,24 @@ def link_delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
     delete_all: bool = typer.Option(False, "--all", help="Delete all links in the operation (dangerous)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
-    asyncio.run(_bulk_delete(operation_id, "link", flt, delete_all))
+    asyncio.run(_bulk_delete(operation_id, "link", flt, delete_all, verbose))
 
 
 @link_app.command("list")
 def link_list(
     operation_id: str,
     as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             records = await client.collab.link_list(operation_id=operation_id)
             if as_json:
-                print_json(records)
+                print_result(records, verbose=verbose)
             else:
-                print_records(_link_rows(records), title="Links")
+                print_result(_link_rows(records), verbose=verbose, formatter=lambda d: print_records(d, title="Links"))
 
     asyncio.run(_run())
 
@@ -351,6 +366,7 @@ def highlight_create(
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
     color: str | None = typer.Option(None, "--color"),
     private: bool = typer.Option(False, "--private"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         parsed_range = _parse_time_range(time_range)
@@ -366,7 +382,7 @@ def highlight_create(
                 color=color,
                 private=private,
             )
-            print_json(created)
+            print_result(created, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -380,6 +396,7 @@ def highlight_update(
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
     color: str | None = typer.Option(None, "--color"),
     time_range: str | None = typer.Option(None, "--time-range", help="START_NS,END_NS"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         if all(
@@ -403,18 +420,21 @@ def highlight_update(
                 color=color,
                 time_range=parsed_range,
             )
-            print_json(updated)
+            print_result(updated, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @highlight_app.command("delete")
-def highlight_delete(obj_id: str) -> None:
+def highlight_delete(
+    obj_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     async def _run() -> None:
         async with get_client() as client:
             await client.ensure_websocket()
             deleted = await client.collab.highlight_delete(obj_id=obj_id)
-            print_json(deleted)
+            print_result(deleted, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -424,21 +444,23 @@ def highlight_delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
     delete_all: bool = typer.Option(False, "--all", help="Delete all highlights in the operation (dangerous)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
-    asyncio.run(_bulk_delete(operation_id, "highlight", flt, delete_all))
+    asyncio.run(_bulk_delete(operation_id, "highlight", flt, delete_all, verbose))
 
 
 @highlight_app.command("list")
 def highlight_list(
     operation_id: str,
     as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             records = await client.collab.highlight_list(operation_id=operation_id)
             if as_json:
-                print_json(records)
+                print_result(records, verbose=verbose)
             else:
-                print_records(_highlight_rows(records), title="Highlights")
+                print_result(_highlight_rows(records), verbose=verbose, formatter=lambda d: print_records(d, title="Highlights"))
 
     asyncio.run(_run())

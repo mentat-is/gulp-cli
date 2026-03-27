@@ -151,6 +151,12 @@ Ingest a single file:
 gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evtx
 ```
 
+Delete and recreate operation before ingest (optional, destructive):
+
+```bash
+gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evtx --reset-operation
+```
+
 **Expected output:**
 ```
 📥 Ingesting files...

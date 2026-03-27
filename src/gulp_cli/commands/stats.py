@@ -12,7 +12,7 @@ from rich.progress_bar import ProgressBar
 from rich.table import Table
 
 from gulp_cli.client import get_client
-from gulp_cli.output import console, print_error, print_json
+from gulp_cli.output import console, print_error, print_json, print_result
 from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Request stats commands")
@@ -340,6 +340,7 @@ def delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
     delete_all: bool = typer.Option(False, "--all", help="Delete all request stats in the operation (dangerous)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete request stats using the server-side object_delete_bulk API."""
 
@@ -353,7 +354,7 @@ def delete_bulk(
                 obj_type="request_stats",
                 flt=flt_obj,
             )
-            print_json(deleted)
+            print_result(deleted, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -366,6 +367,7 @@ def cancel_request(
         "--expire-now",
         help="Immediately expire and delete request stats entry after cancellation",
     ),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Cancel a running request using the server-side request_cancel API."""
 
@@ -375,6 +377,6 @@ def cancel_request(
                 req_id_to_cancel=req_id,
                 expire_now=expire_now,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())

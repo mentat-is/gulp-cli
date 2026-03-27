@@ -8,7 +8,7 @@ from typing import Any
 import typer
 
 from gulp_cli.client import get_client
-from gulp_cli.output import print_json
+from gulp_cli.output import print_json, print_result
 from gulp_cli.utils import parse_json_list_option, parse_json_option
 
 app = typer.Typer(help="Query commands")
@@ -52,6 +52,7 @@ def query_raw(
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         q_parsed = parse_json_list_option(q, field_name="q")
@@ -71,7 +72,7 @@ def query_raw(
                 q_options=options,
                 wait=wait,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -85,6 +86,7 @@ def query_gulp(
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         flt_parsed = parse_json_option(flt, field_name="flt")
@@ -102,7 +104,7 @@ def query_gulp(
                 q_options=options,
                 wait=wait,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -118,6 +120,7 @@ def query_external(
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Query an external data source through a query plugin."""
 
@@ -143,7 +146,7 @@ def query_external(
                 q_options=options,
                 wait=wait,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -152,6 +155,7 @@ def query_external(
 def document_get_by_id(
     operation_id: str,
     doc_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get a single document by OpenSearch _id (query_single_id API)."""
 
@@ -161,7 +165,7 @@ def document_get_by_id(
                 operation_id=operation_id,
                 doc_id=doc_id,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -170,6 +174,7 @@ def document_get_by_id(
 def query_aggregation(
     operation_id: str,
     q: str = typer.Option(..., "--q", help="JSON object with OpenSearch aggregation query"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Run a synchronous aggregation query."""
 
@@ -182,19 +187,21 @@ def query_aggregation(
                 operation_id=operation_id,
                 q=q_parsed,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @app.command("history-get")
-def query_history_get() -> None:
+def query_history_get(
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     """Get the query history for the authenticated user."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.queries.query_history_get()
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -204,6 +211,7 @@ def query_max_min_per_field(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpQueryFilter"),
     group_by: str | None = typer.Option(None, "--group-by", help="Optional field to group by (e.g. event.code)"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get min/max values for timestamp/event fields, optionally grouped by a field."""
 
@@ -215,7 +223,7 @@ def query_max_min_per_field(
                 flt=flt_parsed,
                 group_by=group_by,
             )
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -229,6 +237,7 @@ def query_gulp_export(
     preview: bool = typer.Option(False, "--preview", help="Set q_options.preview_mode (ignored server-side by export API)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Export query_gulp results into a JSON file (streamed download)."""
 
@@ -250,6 +259,6 @@ def query_gulp_export(
                 flt=flt_parsed,
                 q_options=options,
             )
-            print_json({"output_path": saved_path})
+            print_result({"output_path": saved_path}, verbose=verbose)
 
     asyncio.run(_run())

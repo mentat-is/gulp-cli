@@ -6,7 +6,7 @@ from typing import Any
 import typer
 
 from gulp_cli.client import get_client
-from gulp_cli.output import print_json, print_records
+from gulp_cli.output import print_json, print_records, print_result
 from gulp_cli.utils import comma_split, parse_json_option
 
 app = typer.Typer(help="User group management (admin required)")
@@ -16,6 +16,7 @@ app = typer.Typer(help="User group management (admin required)")
 def group_list(
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON"),
     as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List user groups."""
 
@@ -24,21 +25,24 @@ def group_list(
         async with get_client() as client:
             groups = await client.user_groups.list(flt=flt_obj)
             if as_json:
-                print_json(groups)
+                print_result(groups, verbose=verbose)
             else:
-                print_records(groups, title="User Groups")
+                print_result(groups, verbose=verbose, formatter=lambda d: print_records(d, title="User Groups"))
 
     asyncio.run(_run())
 
 
 @app.command("get")
-def group_get(group_id: str) -> None:
+def group_get(
+    group_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     """Get a user group by ID."""
 
     async def _run() -> None:
         async with get_client() as client:
             group = await client.user_groups.get(group_id)
-            print_json(group)
+            print_result(group, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -49,6 +53,7 @@ def group_create(
     permission: str = typer.Option(..., "--permission", help="Comma-separated permissions (read, edit, ingest, admin)"),
     description: str | None = typer.Option(None, "--description", "-d"),
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Create a user group."""
 
@@ -63,7 +68,7 @@ def group_create(
                 description=description,
                 glyph_id=glyph_id,
             )
-            print_json(group)
+            print_result(group, verbose=verbose)
 
     asyncio.run(_run())
 
@@ -74,6 +79,7 @@ def group_update(
     permission: str | None = typer.Option(None, "--permission", help="Comma-separated permissions to replace"),
     description: str | None = typer.Option(None, "--description", "-d"),
     glyph_id: str | None = typer.Option(None, "--glyph-id"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Update a user group's properties."""
 
@@ -89,42 +95,49 @@ def group_update(
             kwargs["glyph_id"] = glyph_id
         async with get_client() as client:
             group = await client.user_groups.update(group_id, **kwargs)
-            print_json(group)
+            print_result(group, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @app.command("delete")
-def group_delete(group_id: str) -> None:
+def group_delete(
+    group_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     """Delete a user group (users are NOT deleted)."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.user_groups.delete(group_id)
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @app.command("add-user")
-def group_add_user(group_id: str, user_id: str) -> None:
+def group_add_user(group_id: str, user_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     """Add a user to a group."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.user_groups.add_user(group_id, user_id)
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())
 
 
 @app.command("remove-user")
-def group_remove_user(group_id: str, user_id: str) -> None:
+def group_remove_user(group_id: str, user_id: str,
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
     """Remove a user from a group."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.user_groups.remove_user(group_id, user_id)
-            print_json(result)
+            print_result(result, verbose=verbose)
 
     asyncio.run(_run())

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from rich.console import Console
 from rich.json import JSON
@@ -49,3 +49,25 @@ def print_records(records: list[dict[str, Any]], title: str | None = None) -> No
         table.add_row(*[str(record.get(key, "")) for key in keys])
 
     console.print(table)
+
+
+def print_result(
+    data: Any,
+    verbose: bool = False,
+    formatter: Callable[[Any], None] | None = None,
+) -> None:
+    """
+    Print result data with conditional verbose mode.
+    
+    Args:
+        data: The result data to print
+        verbose: If True, always print full JSON output
+        formatter: Callable that formats/prints the summary (called only if verbose=False)
+    """
+    if verbose:
+        print_json(data)
+    elif formatter:
+        formatter(data)
+    else:
+        # Default: print full JSON if no formatter provided
+        print_json(data)

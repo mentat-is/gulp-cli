@@ -5,10 +5,16 @@ import typer
 from gulp_cli.commands.acl import app as acl_app
 from gulp_cli.commands.auth import app as auth_app
 from gulp_cli.commands.collab import app as collab_app
+from gulp_cli.commands.context import app as context_app
 from gulp_cli.commands.db import app as db_app
+from gulp_cli.commands.enhance_map import app as enhance_map_app
+from gulp_cli.commands.glyph import app as glyph_app
 from gulp_cli.commands.ingest import app as ingest_app
+from gulp_cli.commands.mapping import app as mapping_app
 from gulp_cli.commands.operations import app as operation_app
+from gulp_cli.commands.plugin import app as plugin_app
 from gulp_cli.commands.query import app as query_app
+from gulp_cli.commands.source import app as source_app
 from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.storage import app as storage_app
 from gulp_cli.commands.user_group import app as user_group_app
@@ -23,6 +29,8 @@ app.add_typer(auth_app, name="auth")
 app.add_typer(user_app, name="user")
 app.add_typer(user_group_app, name="user-group")
 app.add_typer(operation_app, name="operation")
+app.add_typer(context_app, name="context")
+app.add_typer(source_app, name="source")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(query_app, name="query")
 app.add_typer(stats_app, name="stats")
@@ -30,3 +38,7 @@ app.add_typer(storage_app, name="storage")
 app.add_typer(collab_app, name="collab")
 app.add_typer(db_app, name="db")
 app.add_typer(acl_app, name="acl")
+app.add_typer(plugin_app, name="plugin")
+app.add_typer(mapping_app, name="mapping")
+app.add_typer(enhance_map_app, name="enhance-map")
+app.add_typer(glyph_app, name="glyph")
