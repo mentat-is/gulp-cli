@@ -1,6 +1,6 @@
 # 🚀 gulp-cli
 
-> THIS IS STILL WIP!
+> THIS IS STILL WIP! for the cli to work, set `"ws_ignore_missing": true` in your `gulp_cfg.json` to prevent the backend from halting operations when the CLI disconnects its websocket after sending an async request. This is a temporary workaround until (if)we implement a proper solution for maintaining the websocket lifecycle in the CLI.
 
 **A modern, powerful command-line interface for gULP** — manage forensic document ingestion, querying, enrichment, and collaboration entirely from your terminal.
 
