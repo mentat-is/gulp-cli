@@ -84,6 +84,67 @@ gulp-cli ingest file-to-source incident-001 data-2026-001 win_evtx /additional/e
 
 ---
 
+## Request Stats Monitoring Workflows
+
+### Monitor Ongoing Requests (Live)
+
+```bash
+# Default behavior: ongoing-only + live refresh
+gulp-cli stats list incident-001
+```
+
+### Inspect All Request Stats Once
+
+```bash
+# Disable live refresh for a static snapshot
+gulp-cli stats list incident-001 --all --no-live
+```
+
+### Focus on Failed Requests
+
+```bash
+# Show only request stats that contain errors
+gulp-cli stats list incident-001 --all --errors present --no-live
+```
+
+### Filter by User, Type, and Server
+
+```bash
+# Only ingestion requests started by admin
+gulp-cli stats list incident-001 --all --user-id admin --req-type ingest --no-live
+
+# Only requests handled by a specific server instance
+gulp-cli stats list incident-001 --all --server-id my-server-1 --no-live
+```
+
+### Filter by Creation Time Window
+
+```bash
+# ISO8601 window
+gulp-cli stats list incident-001 --all \
+  --time-created-from '2026-03-27T09:00:00Z' \
+  --time-created-to '2026-03-27T18:00:00Z' \
+  --no-live
+
+# Epoch timestamp window
+gulp-cli stats list incident-001 --all \
+  --time-created-from 1774602000000 \
+  --time-created-to 1774634400000 \
+  --no-live
+```
+
+### Use Stats While Ingestion Is Running
+
+```bash
+# Terminal 1: start ingestion
+gulp-cli ingest file incident-001 win_evtx '/evidence/**/*.evtx'
+
+# Terminal 2: watch request stats with faster refresh
+gulp-cli stats list incident-001 --refresh-seconds 0.5
+```
+
+---
+
 ## Query Workflows
 
 ### Match All Documents (Discovery)

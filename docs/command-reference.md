@@ -611,6 +611,65 @@ gulp-cli query external my_op \
 
 ---
 
+## Request Stats (`stats`)
+
+#### `list`
+
+List `GulpRequestStats` for an operation.
+
+```bash
+gulp-cli stats list OPERATION_ID [OPTIONS]
+```
+
+**Default behavior:**
+- Shows only ongoing stats (`--ongoing-only` enabled)
+- Renders a live table (`--live` enabled)
+- Default columns: `user_id`, `ws_id`, `req_id`, `status`, `req_type`, `time_updated`, `data`, `errors`
+
+**Options:**
+- `--ongoing-only / --all` — Show only ongoing (default) or all stats
+- `--user-id TEXT` — Filter by user id
+- `--req-type TEXT` — Filter by request type (for example: `ingest`, `query`, `enrich`)
+- `--server-id TEXT` — Filter by server id
+- `--time-created-from TEXT` — Include stats created at/after timestamp (epoch sec/ms or ISO8601)
+- `--time-created-to TEXT` — Include stats created at/before timestamp (epoch sec/ms or ISO8601)
+- `--errors [any|present|absent]` — Filter by error presence (default: `any`)
+- `--live / --no-live` — Enable or disable live refresh
+- `--refresh-seconds FLOAT` — Live refresh interval (default: `1.0`)
+- `--limit INTEGER` — Max rows to render (default: `100`)
+
+**Examples:**
+```bash
+# Default: ongoing-only + live refresh
+gulp-cli stats list incident-001
+
+# Show all stats once (no live refresh)
+gulp-cli stats list incident-001 --all --no-live
+
+# Only stats with errors
+gulp-cli stats list incident-001 --all --errors present --no-live
+
+# Only stats without errors
+gulp-cli stats list incident-001 --all --errors absent --no-live
+
+# Filter by user and request type
+gulp-cli stats list incident-001 --all --user-id admin --req-type ingest
+
+# Filter by server id
+gulp-cli stats list incident-001 --all --server-id my-server-1 --no-live
+
+# Filter by creation time window (ISO8601)
+gulp-cli stats list incident-001 --all \
+  --time-created-from '2026-03-27T00:00:00Z' \
+  --time-created-to '2026-03-27T23:59:59Z' \
+  --no-live
+
+# Faster live refresh while monitoring active ingestion
+gulp-cli stats list incident-001 --refresh-seconds 0.5
+```
+
+---
+
 ## Enrichment & Tagging (`enrich`)
 
 #### `tag`

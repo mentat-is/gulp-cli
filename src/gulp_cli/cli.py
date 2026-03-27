@@ -6,6 +6,7 @@ from gulp_cli.commands.auth import app as auth_app
 from gulp_cli.commands.ingest import app as ingest_app
 from gulp_cli.commands.operations import app as operation_app
 from gulp_cli.commands.query import app as query_app
+from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.users import app as user_app
 
 app = typer.Typer(
@@ -18,3 +19,4 @@ app.add_typer(user_app, name="user")
 app.add_typer(operation_app, name="operation")
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(query_app, name="query")
+app.add_typer(stats_app, name="stats")
