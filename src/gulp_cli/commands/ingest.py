@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from gulp_sdk.websocket import WSMessage, WSMessageType
+from rich.markup import escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 
 from gulp_cli.client import get_client
@@ -18,6 +19,7 @@ app = typer.Typer(help="Ingestion commands")
 # How long to keep the websocket alive waiting for STATS_CREATE confirmation
 # when --wait is NOT used.  Should be well above the worker task-scheduling lag.
 _WS_CONFIRM_TIMEOUT_SEC = 30.0
+_TERMINAL_STATUSES = {"done", "failed", "canceled"}
 
 
 async def _wait_for_stats_create(
@@ -72,16 +74,46 @@ async def _wait_for_completion(
     timeout: int,
     verbose: bool,
 ) -> list[dict[str, Any]]:
-    """Wait for every ingest request to reach a terminal status via websocket.
+    """Wait for every ingest request to reach a terminal status via websocket only.
 
-    Uses the SDK's ``wait_for_request_stats`` which is WS-first and only falls
-    back to polling if the websocket is unavailable.
+    This function intentionally avoids HTTP polling and relies exclusively on
+    websocket packets (STATS_CREATE/STATS_UPDATE/INGEST_SOURCE_DONE/ERROR).
 
     Returns a list of result dicts (one per file) with final status.
     """
-    from gulp_sdk.api.request_utils import wait_for_request_stats
 
     ws = await client.ensure_websocket()
+    req_to_file: dict[str, str] = {rid: file_path for file_path, rid in file_req_map.items()}
+
+    def _extract_payload_obj(msg: WSMessage) -> dict[str, Any]:
+        if not isinstance(msg.data, dict):
+            return {}
+        obj = msg.data.get("obj")
+        if isinstance(obj, dict):
+            return obj
+        return msg.data
+
+    def _to_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _status_label(status: str, ingested: int, skipped: int, failed: int) -> str:
+        return f"{status}: ingested={ingested}, skipped={skipped}, failed={failed}"
+
+    states: dict[str, dict[str, Any]] = {
+        req_id: {
+            "status": "ongoing",
+            "ingested": 0,
+            "skipped": 0,
+            "failed": 0,
+            "stats": {},
+            "event": asyncio.Event(),
+        }
+        for req_id in file_req_map.values()
+        if req_id
+    }
 
     results: list[dict[str, Any]] = []
     # Rich progress bar: one task per file
@@ -96,52 +128,155 @@ async def _wait_for_completion(
     ) as progress:
         task_ids: dict[str, Any] = {}
         for file_path, req_id in file_req_map.items():
+            sid_tag = escape(f"[{req_id[:8]}]")
             task_ids[req_id] = progress.add_task(
-                Path(file_path).name, total=None
+                f"{sid_tag} {Path(file_path).name}", total=None
             )
 
-        def _make_ws_callback(req_id: str):
-            def _cb(msg: WSMessage) -> None:
-                tid = task_ids.get(req_id)
-                if tid is None:
-                    return
-                if msg.type == WSMessageType.INGEST_SOURCE_DONE.value:
-                    ingested = 0
-                    if isinstance(msg.data, dict):
-                        obj = msg.data.get("obj", msg.data)
-                        if isinstance(obj, dict):
-                            ingested = obj.get("records_ingested", 0) or 0
-                    progress.update(tid, description=f"{Path(list(file_req_map.keys())[list(file_req_map.values()).index(req_id)]).name} ({ingested} docs)")
-                elif msg.type in (WSMessageType.STATS_UPDATE.value, WSMessageType.STATS_CREATE.value):
-                    if isinstance(msg.data, dict):
-                        obj = msg.data.get("obj", msg.data)
-                        if isinstance(obj, dict):
-                            pct = obj.get("ingest_percentage", None)
-                            if pct is not None:
-                                progress.update(tid, completed=pct, total=100)
-            return _cb
+        def _on_message(msg: WSMessage) -> None:
+            req_id = msg.req_id
+            state = states.get(req_id)
+            if state is None:
+                return
 
-        wait_tasks = [
-            wait_for_request_stats(
-                client,
-                req_id,
-                timeout,
-                ws_callback=_make_ws_callback(req_id),
-            )
-            for req_id in file_req_map.values()
-        ]
-        stats_list = await asyncio.gather(*wait_tasks, return_exceptions=True)
+            tid = task_ids.get(req_id)
+            if tid is None:
+                return
 
-        for (file_path, req_id), stat in zip(file_req_map.items(), stats_list):
-            if isinstance(stat, BaseException):
-                results.append({"file": file_path, "req_id": req_id, "status": "error", "error": str(stat)})
-            elif isinstance(stat, dict):
-                if verbose:
-                    results.append({"file": file_path, "req_id": req_id, "result": stat})
+            file_name = Path(req_to_file.get(req_id, req_id)).name
+            sid_tag = escape(f"[{req_id[:8]}]")
+            obj = _extract_payload_obj(msg)
+
+            if msg.type == WSMessageType.INGEST_SOURCE_DONE.value:
+                state["ingested"] += _to_int(obj.get("records_ingested"))
+                state["skipped"] += _to_int(obj.get("records_skipped"))
+                state["failed"] += _to_int(obj.get("records_failed"))
+                state.setdefault("sources_done", 0)
+                state["sources_done"] += 1
+                progress.update(
+                    tid,
+                    description=(
+                        f"{sid_tag} {file_name} (running: ingested={state['ingested']}, "
+                        f"skipped={state['skipped']}, failed={state['failed']})"
+                    ),
+                )
+                return
+
+            if msg.type in (WSMessageType.STATS_CREATE.value, WSMessageType.STATS_UPDATE.value):
+                state["stats"] = obj
+                status = str(obj.get("status", state["status"]))
+                pct = obj.get("ingest_percentage")
+                if pct is not None:
+                    progress.update(tid, completed=pct, total=100)
+
+                # If aggregated counters are available in stats and we have not
+                # received all source-done packets yet, use them as fallback.
+                state["ingested"] = max(state["ingested"], _to_int(obj.get("records_ingested")))
+                state["skipped"] = max(state["skipped"], _to_int(obj.get("records_skipped")))
+                state["failed"] = max(state["failed"], _to_int(obj.get("records_failed")))
+
+                state["status"] = status
+                if status in _TERMINAL_STATUSES:
+                    progress.update(
+                        tid,
+                        completed=100,
+                        total=100,
+                        description=f"{sid_tag} {file_name} ({_status_label(status, state['ingested'], state['skipped'], state['failed'])})",
+                    )
+                    state["event"].set()
+                return
+
+            if msg.type == WSMessageType.ERROR.value:
+                state["status"] = "failed"
+                state["stats"] = obj
+                progress.update(
+                    tid,
+                    completed=100,
+                    total=100,
+                    description=f"{sid_tag} {file_name} ({_status_label('failed', state['ingested'], state['skipped'], state['failed'])})",
+                )
+                state["event"].set()
+
+        ws.on_message(WSMessageType.INGEST_SOURCE_DONE, _on_message)
+        ws.on_message(WSMessageType.STATS_CREATE, _on_message)
+        ws.on_message(WSMessageType.STATS_UPDATE, _on_message)
+        ws.on_message(WSMessageType.ERROR, _on_message)
+
+        deadline = None if timeout == 0 else asyncio.get_running_loop().time() + timeout
+        try:
+            for req_id, state in states.items():
+                if deadline is None:
+                    await state["event"].wait()
                 else:
-                    results.append({"file": file_path, "req_id": req_id, "status": stat.get("status", "unknown")})
-            else:
+                    remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+                    if remaining == 0.0 and not state["event"].is_set():
+                        continue
+                    try:
+                        await asyncio.wait_for(state["event"].wait(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        pass
+        finally:
+            ws.off_message(WSMessageType.INGEST_SOURCE_DONE, _on_message)
+            ws.off_message(WSMessageType.STATS_CREATE, _on_message)
+            ws.off_message(WSMessageType.STATS_UPDATE, _on_message)
+            ws.off_message(WSMessageType.ERROR, _on_message)
+
+        for file_path, req_id in file_req_map.items():
+            tid = task_ids.get(req_id)
+            state = states.get(req_id)
+            sid_tag = escape(f"[{req_id[:8]}]")
+
+            if tid is not None:
+                try:
+                    if state and state.get("status") in _TERMINAL_STATUSES:
+                        status = str(state.get("status"))
+                        progress.update(
+                            tid,
+                            completed=100,
+                            total=100,
+                            description=(
+                                f"{sid_tag} {Path(file_path).name} ("
+                                f"{_status_label(status, state.get('ingested', 0), state.get('skipped', 0), state.get('failed', 0))}"
+                                ")"
+                            ),
+                        )
+                    elif state and not state.get("event").is_set():
+                        progress.update(
+                            tid,
+                            description=(
+                                f"{sid_tag} {Path(file_path).name} (timeout: ingested={state.get('ingested', 0)}, "
+                                f"skipped={state.get('skipped', 0)}, failed={state.get('failed', 0)})"
+                            ),
+                        )
+                except Exception:
+                    pass
+
+            if state is None:
                 results.append({"file": file_path, "req_id": req_id, "status": "unknown"})
+            elif verbose:
+                results.append(
+                    {
+                        "file": file_path,
+                        "req_id": req_id,
+                        "status": state.get("status", "unknown"),
+                        "ingested": state.get("ingested", 0),
+                        "skipped": state.get("skipped", 0),
+                        "failed": state.get("failed", 0),
+                        "result": state.get("stats", {}),
+                        "ws_only": True,
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "file": file_path,
+                        "req_id": req_id,
+                        "status": state.get("status", "unknown"),
+                        "ingested": state.get("ingested", 0),
+                        "skipped": state.get("skipped", 0),
+                        "failed": state.get("failed", 0),
+                    }
+                )
 
     return results
 
