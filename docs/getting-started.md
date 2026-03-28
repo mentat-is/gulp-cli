@@ -46,7 +46,7 @@ gulp-cli auth login --url http://localhost:8080 --username admin --password admi
 This:
 - Connects to your gULP instance
 - Exchanges credentials for a token
-- Stores token in `~/.config/gulp-cli/config.json`
+- Stores the session in `~/.config/gulp-cli/config.json`
 
 **Output should be:**
 ```
@@ -73,8 +73,11 @@ You can login as different users:
 
 ```bash
 gulp-cli auth login --url http://localhost:8080 --username guest --password guest
-gulp-cli auth whoami  # Should show "guest" with read-only permissions
+gulp-cli --as-user guest auth whoami  # Should show "guest" with read-only permissions
+gulp-cli --as-user admin auth whoami  # Switch back for this command only
 ```
+
+The last successful login becomes the default session. Use `--as-user USERNAME` on any command to temporarily run it as another already-logged-in user.
 
 ### Logout
 
@@ -82,7 +85,8 @@ Clear your token:
 
 ```bash
 gulp-cli auth logout
-# Now you're logged out and must re-authenticate
+gulp-cli --as-user guest auth logout
+# Logout removes only the selected saved session
 ```
 
 ---

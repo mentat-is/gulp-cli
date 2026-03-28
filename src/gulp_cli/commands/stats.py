@@ -436,6 +436,21 @@ def list_stats(
     asyncio.run(_run())
 
 
+@app.command("get")
+def get_stats(
+    req_id: str = typer.Argument(..., help="Request stats ID / req_id"),
+    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
+) -> None:
+    """Get one GulpRequestStats object by request ID."""
+
+    async def _run() -> None:
+        async with get_client() as client:
+            stats = await client.plugins.request_get(req_id)
+            print_result(stats, verbose=verbose)
+
+    asyncio.run(_run())
+
+
 @app.command("delete-bulk")
 def delete_bulk(
     operation_id: str,

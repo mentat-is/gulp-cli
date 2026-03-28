@@ -100,13 +100,19 @@ Real-world workflows and recipes for common investigation scenarios.
 # Login (first time setup)
 gulp-cli auth login --url http://localhost:8080 --username admin --password admin
 
+# Save a second session too
+gulp-cli auth login --url http://localhost:8080 --username guest --password guest
+
 # Check who you are
 gulp-cli auth whoami
+
+# Run a single command as another already-logged-in user
+gulp-cli --as-user guest auth whoami
 
 # Switch server
 gulp-cli auth login --url http://prod.server.local:8080 --username analyst --password pass
 
-# Logout
+# Logout one saved session
 gulp-cli auth logout
 ```
 
@@ -185,6 +191,12 @@ gulp-cli ingest file-to-source incident-001 data-2026-001 win_evtx /additional/e
 ```bash
 # Default behavior: ongoing-only + live refresh
 gulp-cli stats list incident-001
+```
+
+### Get One Request Stat By Id
+
+```bash
+gulp-cli stats get 903546ff-c01e-4875-a585-d7fa34a0d237
 ```
 
 ### Inspect All Request Stats Once
@@ -617,6 +629,25 @@ gulp-cli operation revoke-user incident-2026-001 analyst2
 
 # Or archive by deleting if not needed anymore
 gulp-cli operation delete incident-2026-001 --confirm
+```
+
+### Inspect and Revoke User Sessions
+
+```bash
+# List all logged-in sessions (admin)
+gulp-cli user session-list
+
+# List sessions for one specific user
+gulp-cli user session-list --user-id analyst1
+
+# Revoke a session by its id
+gulp-cli user session-delete token_analyst1
+
+# Non-admin users can revoke only their own session
+gulp-cli --as-user analyst1 user session-delete token_analyst1
+
+# Run the same command using another saved CLI login
+gulp-cli --as-user admin user session-list
 ```
 
 ---

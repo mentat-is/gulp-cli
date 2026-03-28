@@ -12,6 +12,14 @@ Commands are organized hierarchically (e.g., `gulp-cli auth login`). This refere
 gulp-cli <group> <command> [OPTIONS] [ARGUMENTS]
 ```
 
+Global option available on every command:
+
+```bash
+gulp-cli --as-user USER_NAME <group> <command> ...
+```
+
+`--as-user` uses a different already-saved login session for the current command only.
+
 ---
 
 ## Core Commands
@@ -34,25 +42,26 @@ gulp-cli auth login [OPTIONS]
 **Examples:**
 ```bash
 gulp-cli auth login --url http://localhost:8080 --username admin --password admin
+gulp-cli auth login --url http://localhost:8080 --username guest --password guest
 gulp-cli auth login  # Prompts for missing values
 ```
+
+Each login is saved under that username, so you can switch later with the global `--as-user` flag.
 
 ---
 
 #### `logout`
 
-Clear stored authentication token.
+Logout the current saved session.
 
 ```bash
 gulp-cli auth logout [OPTIONS]
 ```
 
-**Options:**
-- `--config-dir TEXT` — Config directory override
-
 **Examples:**
 ```bash
 gulp-cli auth logout
+gulp-cli --as-user guest auth logout
 ```
 
 ---
@@ -65,12 +74,10 @@ Display current authenticated user info.
 gulp-cli auth whoami [OPTIONS]
 ```
 
-**Options:**
-- `--config-dir TEXT` — Config directory override
-
 **Examples:**
 ```bash
 gulp-cli auth whoami
+gulp-cli --as-user guest auth whoami
 ```
 
 **Output:**
@@ -194,21 +201,52 @@ gulp-cli user delete alice --confirm
 
 ---
 
-#### `session-delete`
+#### `session-list`
 
-Delete a specific user session.
+List `GulpUserSession` objects using the dedicated session API.
+
+- Non-admin users can list only their own session.
+- Admin users can list all sessions or filter by `--user-id`.
 
 ```bash
-gulp-cli user session-delete USERNAME SESSION_ID [OPTIONS]
+gulp-cli user session-list [OPTIONS]
 ```
 
-**Arguments:**
-- `USERNAME` — Username
-- `SESSION_ID` — Session ID to delete
+**Options:**
+- `--user-id TEXT` — Optional user filter; admin required for other users
+- `--json` — Output raw JSON
+- `--verbose` — Print complete result JSON instead of summary
 
 **Examples:**
 ```bash
-gulp-cli user session-delete alice abc123def456
+gulp-cli user session-list
+gulp-cli user session-list --user-id alice
+gulp-cli --as-user guest user session-list
+```
+
+---
+
+#### `session-delete`
+
+Delete a specific user session using the dedicated session API.
+
+- Non-admin users can delete only their own session.
+- Admin users can delete any session.
+
+```bash
+gulp-cli user session-delete SESSION_ID [OPTIONS]
+```
+
+**Arguments:**
+- `SESSION_ID` — Session ID to delete
+
+**Options:**
+- `--verbose` — Print complete result JSON instead of summary
+
+**Examples:**
+```bash
+gulp-cli user session-delete abc123def456
+gulp-cli --as-user admin user session-delete abc123def456
 ```
 
 ---
@@ -799,6 +837,25 @@ For implementation details and examples, see `docs/extensions.md`.
 ---
 
 ## Request Stats (`stats`)
+
+#### `get`
+
+Get one `GulpRequestStats` object by request id.
+
+```bash
+gulp-cli stats get REQ_ID [OPTIONS]
+```
+
+**Options:**
+- `--verbose` — Print complete result JSON instead of summary
+
+**Examples:**
+```bash
+gulp-cli stats get 903546ff-c01e-4875-a585-d7fa34a0d237
+gulp-cli --as-user admin stats get 903546ff-c01e-4875-a585-d7fa34a0d237 --verbose
+```
+
+---
 
 #### `list`
 
