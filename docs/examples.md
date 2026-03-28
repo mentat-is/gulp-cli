@@ -1,3 +1,91 @@
+- [gulp-cli Practical Examples](#gulp-cli-practical-examples)
+  - [Quick Reference Examples](#quick-reference-examples)
+    - [Authentication](#authentication)
+  - [Ingestion Workflows](#ingestion-workflows)
+    - [Single File Ingestion](#single-file-ingestion)
+    - [Bulk File Ingestion with Wildcard](#bulk-file-ingestion-with-wildcard)
+    - [Concurrent Multi-Source Ingestion](#concurrent-multi-source-ingestion)
+    - [CSV Data Ingestion with Custom Parameters](#csv-data-ingestion-with-custom-parameters)
+    - [JSON Logs Ingestion](#json-logs-ingestion)
+    - [Add More Evidence to Existing Source](#add-more-evidence-to-existing-source)
+  - [Request Stats Monitoring Workflows](#request-stats-monitoring-workflows)
+    - [Monitor Ongoing Requests (Live)](#monitor-ongoing-requests-live)
+    - [Inspect All Request Stats Once](#inspect-all-request-stats-once)
+    - [Focus on Failed Requests](#focus-on-failed-requests)
+    - [Filter by User, Type, and Server](#filter-by-user-type-and-server)
+    - [Filter by Creation Time Window](#filter-by-creation-time-window)
+    - [Use Stats While Ingestion Is Running](#use-stats-while-ingestion-is-running)
+    - [Bulk Delete Request Stats](#bulk-delete-request-stats)
+    - [Cancel a Running Request](#cancel-a-running-request)
+  - [Rebase Workflows](#rebase-workflows)
+    - [Shift All Documents Forward in Time](#shift-all-documents-forward-in-time)
+    - [Rebase Only a Filtered Subset](#rebase-only-a-filtered-subset)
+    - [Rebase with a Custom Script](#rebase-with-a-custom-script)
+  - [Collaboration Workflows](#collaboration-workflows)
+    - [Create a Time-Pinned Note](#create-a-time-pinned-note)
+    - [Create a Note Attached to a Document](#create-a-note-attached-to-a-document)
+    - [Update and List Notes](#update-and-list-notes)
+    - [Create and Maintain Links Between Documents](#create-and-maintain-links-between-documents)
+    - [Create and Update Highlights](#create-and-update-highlights)
+    - [Export Raw Collaboration Objects as JSON](#export-raw-collaboration-objects-as-json)
+    - [Bulk Delete Collaboration Objects](#bulk-delete-collaboration-objects)
+  - [Query Workflows](#query-workflows)
+    - [Match All Documents (Discovery)](#match-all-documents-discovery)
+    - [Search by Field Value](#search-by-field-value)
+    - [Complex Queries (Range, Boolean)](#complex-queries-range-boolean)
+    - [Filter by Source](#filter-by-source)
+    - [Aggregation, Document Lookup, and History](#aggregation-document-lookup-and-history)
+  - [Sigma Rule Queries](#sigma-rule-queries)
+    - [Run Single Sigma Rule](#run-single-sigma-rule)
+    - [Run Rule with Severity Filtering](#run-rule-with-severity-filtering)
+    - [Run Rule on Specific Source](#run-rule-on-specific-source)
+    - [Multiple Sigma Rules in Batch](#multiple-sigma-rules-in-batch)
+  - [Enrichment \& Tagging Workflows](#enrichment--tagging-workflows)
+    - [Tag Suspicious Events](#tag-suspicious-events)
+    - [Apply Threat Level Classification](#apply-threat-level-classification)
+    - [Track Analysis Progress](#track-analysis-progress)
+    - [Remove Enrichment Data](#remove-enrichment-data)
+  - [User \& Operation Management](#user--operation-management)
+    - [Create Multi-User Investigation Environment](#create-multi-user-investigation-environment)
+    - [Archive Investigation (Revoke Access)](#archive-investigation-revoke-access)
+  - [Advanced Workflows](#advanced-workflows)
+    - [Full Forensic Investigation Pipeline](#full-forensic-investigation-pipeline)
+    - [Batch Processing Multiple Operations](#batch-processing-multiple-operations)
+    - [Integration with External Tools](#integration-with-external-tools)
+  - [Tips \& Tricks](#tips--tricks)
+    - [Use Aliases for Speed](#use-aliases-for-speed)
+    - [Use Environment Variables for Repetitive Tasks](#use-environment-variables-for-repetitive-tasks)
+    - [Parallel Processing with GNU Parallel](#parallel-processing-with-gnu-parallel)
+    - [Monitor Long-Running Operations](#monitor-long-running-operations)
+  - [Common Error Handling](#common-error-handling)
+  - [User Group Workflows](#user-group-workflows)
+    - [Set Up Role-Based Access](#set-up-role-based-access)
+    - [Update and Clean Up Groups](#update-and-clean-up-groups)
+  - [ACL / Access Control Workflows](#acl--access-control-workflows)
+    - [Grant Operation Access to a Group](#grant-operation-access-to-a-group)
+    - [Grant Access to Individual Users](#grant-access-to-individual-users)
+    - [Private / Public Objects](#private--public-objects)
+  - [Index Management Workflows](#index-management-workflows)
+    - [Inspect Indexes](#inspect-indexes)
+    - [Refresh After Ingestion](#refresh-after-ingestion)
+    - [Remove a Stale Investigation (Destructive)](#remove-a-stale-investigation-destructive)
+  - [Storage Workflows](#storage-workflows)
+    - [List Stored Files](#list-stored-files)
+    - [Download a File by Storage ID](#download-a-file-by-storage-id)
+    - [Delete Files by ID or Tags](#delete-files-by-id-or-tags)
+  - [Enhance Map and Glyph Workflows](#enhance-map-and-glyph-workflows)
+    - [Create and Assign Custom Glyphs](#create-and-assign-custom-glyphs)
+    - [Map Event Codes to Glyph/Color](#map-event-codes-to-glyphcolor)
+    - [Change or Remove a Mapping](#change-or-remove-a-mapping)
+  - [Extension Examples (story and sigma-zip)](#extension-examples-story-and-sigma-zip)
+    - [Query Sigma Rules from ZIP (Extension)](#query-sigma-rules-from-zip-extension)
+    - [Override Built-in Extension with User Extension](#override-built-in-extension-with-user-extension)
+    - [Story Extension Workflows](#story-extension-workflows)
+      - [Create an Incident Story](#create-an-incident-story)
+      - [Update Story Content](#update-story-content)
+      - [List and Inspect Stories](#list-and-inspect-stories)
+  - [See Also](#see-also)
+
 # gulp-cli Practical Examples
 
 Real-world workflows and recipes for common investigation scenarios.
@@ -927,6 +1015,85 @@ gulp-cli enhance-map get <enhance_map_obj_id>
 
 # Delete mapping when no longer needed
 gulp-cli enhance-map delete <enhance_map_obj_id>
+```
+
+---
+
+## Extension Examples (story and sigma-zip)
+
+> These commands are from extension APIs. They are kept separate from built-in commands to avoid confusion.
+
+### Query Sigma Rules from ZIP (Extension)
+
+> needs non-free `query_sigma_zip` plugin to be installed on the server, this is provided just as an example.
+ 
+```bash
+# Execute all Sigma rules inside a zip archive
+gulp-cli query sigma-zip incident-001 \
+  --zip-file /gulp/tests/sigma_windows_small.zip \
+  --wait
+
+# Filter rules by source and level
+gulp-cli query sigma-zip incident-001 \
+  --zip-file /gulp/tests/sigma_windows_small.zip \
+  --src-ids security \
+  --levels critical,high \
+  --wait
+```
+
+### Override Built-in Extension with User Extension
+
+```bash
+# Create external extension folder
+mkdir -p ~/.config/gulp-cli/extension
+
+# Copy and customize built-in query_sigma_zip extension
+cp /gulp/gulp-cli/src/gulp_cli/extension/query_sigma_zip.py \
+  ~/.config/gulp-cli/extension/query_sigma_zip.py
+
+# Next CLI startup loads external file first for same filename
+gulp-cli query sigma-zip --help
+```
+
+---
+
+### Story Extension Workflows
+
+> needs non-free `story` plugin to be installed on the server, this is provided just as an example.
+
+#### Create an Incident Story
+
+```bash
+gulp-cli collab story create incident-001 \
+  --name "Incident timeline summary" \
+  --doc-ids doc-1,doc-2,doc-3 \
+  --highlight-ids hl-1,hl-2 \
+  --description "Key events correlated for executive review" \
+  --tags executive,summary
+```
+
+#### Update Story Content
+
+```bash
+gulp-cli collab story update story-123 \
+  --name "Incident timeline summary (rev2)" \
+  --doc-ids doc-1,doc-4 \
+  --tags executive,final
+```
+
+#### List and Inspect Stories
+
+```bash
+# Compact table output
+gulp-cli collab story list incident-001
+
+# Full JSON output with filter
+gulp-cli collab story list incident-001 \
+  --flt '{"tags":["executive"]}' \
+  --json
+
+# Retrieve one story by id
+gulp-cli collab story get incident-001 story-123
 ```
 
 ---

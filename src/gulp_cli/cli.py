@@ -19,6 +19,7 @@ from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.storage import app as storage_app
 from gulp_cli.commands.user_group import app as user_group_app
 from gulp_cli.commands.users import app as user_app
+from gulp_cli.extensions import load_extensions
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -42,3 +43,26 @@ app.add_typer(plugin_app, name="plugin")
 app.add_typer(mapping_app, name="mapping")
 app.add_typer(enhance_map_app, name="enhance-map")
 app.add_typer(glyph_app, name="glyph")
+
+load_extensions(
+    app,
+    command_groups={
+        "auth": auth_app,
+        "user": user_app,
+        "user-group": user_group_app,
+        "operation": operation_app,
+        "context": context_app,
+        "source": source_app,
+        "ingest": ingest_app,
+        "query": query_app,
+        "stats": stats_app,
+        "storage": storage_app,
+        "collab": collab_app,
+        "db": db_app,
+        "acl": acl_app,
+        "plugin": plugin_app,
+        "mapping": mapping_app,
+        "enhance-map": enhance_map_app,
+        "glyph": glyph_app,
+    },
+)

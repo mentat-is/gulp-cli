@@ -702,6 +702,50 @@ gulp-cli query sigma my_op --rule-file /rules/process_creation.yml --wait
 
 ---
 
+#### `sigma-zip`
+
+Execute Sigma rules from a ZIP archive (extension command).
+
+```bash
+gulp-cli query sigma-zip OPERATION_ID --zip-file PATH [OPTIONS]
+```
+
+**Arguments:**
+- `OPERATION_ID` — Target operation
+
+**Options:**
+- `--zip-file TEXT` — Path to ZIP archive containing Sigma YAML rules (required)
+- `--src-ids TEXT` — Comma-separated source IDs
+- `--levels TEXT` — Comma-separated severity levels (`critical,high,medium,low,informational`)
+- `--tags TEXT` — Comma-separated sigma tags
+- `--products TEXT` — Comma-separated sigma logsource products
+- `--categories TEXT` — Comma-separated sigma logsource categories
+- `--services TEXT` — Comma-separated sigma logsource services
+- `--q-options TEXT` — `GulpQueryParameters` JSON object
+- `--wait` — Wait for completion
+- `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
+- `--verbose` — Print complete result JSON
+
+**Examples:**
+```bash
+# Query using zipped Sigma rules
+gulp-cli query sigma-zip incident-001 --zip-file /rules/windows_small.zip
+
+# Restrict to selected source and levels
+gulp-cli query sigma-zip incident-001 \
+  --zip-file /rules/windows_small.zip \
+  --src-ids security \
+  --levels critical,high \
+  --wait
+
+# Add q_options for paging or highlighting behavior
+gulp-cli query sigma-zip incident-001 \
+  --zip-file /rules/windows_small.zip \
+  --q-options '{"limit":200,"highlight_results":false}'
+```
+
+---
+
 #### `external`
 
 Query using an external plugin.
@@ -737,6 +781,20 @@ gulp-cli query external my_op \
   --q '{"query":{"match":{"message":"error"}}}' \
   --preview --limit 50 --offset 0
 ```
+
+---
+
+## Dynamic Extensions
+
+gulp-cli can load custom commands from extension modules discovered at startup.
+
+- Internal path: `src/gulp_cli/extension/`
+- External path: `~/.config/gulp-cli/extension/`
+- External modules override internal ones when they share the same filename.
+
+Each extension module must expose a callable `register_extension` function.
+
+For implementation details and examples, see `docs/extensions.md`.
 
 ---
 
@@ -1391,6 +1449,108 @@ gulp-cli collab highlight delete-bulk incident-001 \
 
 # Delete all highlights in the operation
 gulp-cli collab highlight delete-bulk incident-001 --all
+```
+
+---
+
+#### `story` (extension)
+
+Story management commands provided by the `story` extension plugin.
+
+```bash
+gulp-cli collab story [COMMAND]
+```
+
+**Commands:**
+- `create` — Create a story object
+- `update` — Update an existing story
+- `delete` — Delete a story by id
+- `get` — Retrieve a story by id
+- `list` — List stories for an operation
+
+---
+
+#### `story create` (extension)
+
+```bash
+gulp-cli collab story create OPERATION_ID --name TEXT --doc-ids DOC1,DOC2 [OPTIONS]
+```
+
+**Options:**
+- `--highlight-ids TEXT` — Comma-separated highlight IDs
+- `--include-whole-documents` — Include all document fields in each story entry
+- `--description TEXT` — Story description
+- `--tags TEXT` — Comma-separated tags
+- `--glyph-id TEXT` — Glyph ID
+- `--color TEXT` — Color string
+- `--private` — Create as private object
+- `--wait` — Wait for completion if endpoint returns pending
+- `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
+
+**Examples:**
+```bash
+gulp-cli collab story create incident-001 \
+  --name "Executive summary" \
+  --doc-ids doc-a,doc-b \
+  --highlight-ids hl-1,hl-2
+```
+
+---
+
+#### `story update` (extension)
+
+```bash
+gulp-cli collab story update STORY_ID [OPTIONS]
+```
+
+**Options:**
+- `--name TEXT` — Update story title
+- `--doc-ids TEXT` — Replace target document IDs
+- `--highlight-ids TEXT` — Replace highlight IDs
+- `--include-whole-documents` — Include all document fields in each story entry
+- `--description TEXT` — Update description
+- `--tags TEXT` — Replace tags
+- `--glyph-id TEXT` — Update glyph ID
+- `--color TEXT` — Update color
+- `--wait` — Wait for completion if endpoint returns pending
+- `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
+
+---
+
+#### `story delete` (extension)
+
+```bash
+gulp-cli collab story delete STORY_ID [OPTIONS]
+```
+
+**Options:**
+- `--wait` — Wait for completion if endpoint returns pending
+- `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
+
+---
+
+#### `story get` (extension)
+
+```bash
+gulp-cli collab story get OPERATION_ID STORY_ID
+```
+
+---
+
+#### `story list` (extension)
+
+```bash
+gulp-cli collab story list OPERATION_ID [OPTIONS]
+```
+
+**Options:**
+- `--flt TEXT` — `GulpCollabFilter` JSON object
+- `--json` — Output raw JSON
+
+**Examples:**
+```bash
+gulp-cli collab story list incident-001
+gulp-cli collab story list incident-001 --flt '{"tags":["executive"]}'
 ```
 
 ---

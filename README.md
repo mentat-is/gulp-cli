@@ -15,6 +15,7 @@
 - 🔌 **Plugins** — list/upload/download plugins and mapping files
 - 🗺️ **Enhance Maps** — map `gulp.event_code` to glyph/color per plugin
 - 🖼️ **Glyphs** — create/list/update/delete custom glyphs
+- 🧩 **Dynamic Extensions** — load custom CLI commands from internal or user extension folders
 - 📊 **Stats** — monitor ingestion and query requests
 - 🎯 **Collaboration** — manage notes, links, highlights
 
@@ -64,6 +65,7 @@ gulp-cli query raw my_operation --q '{"query":{"match_all":{}}}'
 
 - **[Getting Started Guide](./docs/getting-started.md)** — auth, first operation, first ingest
 - **[Command Reference](./docs/command-reference.md)** — all available commands and options
+- **[Extensions Guide](./docs/extensions.md)** — dynamic extension loading and custom command contract
 - **[Resource Management Commands](./docs/resource-management.md)** — context, source, plugin, mapping, enhance-map, glyph
 - **[Practical Examples](./docs/examples.md)** — real-world workflows and recipes
 - **[Troubleshooting](./docs/troubleshooting-cli.md)** — common issues and solutions
