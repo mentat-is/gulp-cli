@@ -25,7 +25,6 @@ def _context_row(context: dict[str, Any]) -> dict[str, Any]:
 @app.command("list")
 def context_list(
     operation_id: str = typer.Argument(..., help="Operation ID"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List contexts in an operation."""
     async def _run() -> None:
@@ -34,8 +33,7 @@ def context_list(
             items = [_context_row(ctx) for ctx in contexts] if isinstance(contexts, list) else [_context_row(contexts)]
             print_result(
                 items,
-                verbose=verbose,
-                formatter=lambda data: print_records(data, title=f"Contexts in {operation_id}")
+                                formatter=lambda data: print_records(data, title=f"Contexts in {operation_id}")
             )
 
     asyncio.run(_run())
@@ -44,13 +42,12 @@ def context_list(
 @app.command("get")
 def context_get(
     context_id: str = typer.Argument(..., help="Context ID"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get context details."""
     async def _run() -> None:
         async with get_client() as client:
             context = await client.operations.context_get(context_id)
-            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context, verbose=verbose)
+            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context)
 
     asyncio.run(_run())
 
@@ -63,7 +60,6 @@ def context_create(
     color: str | None = typer.Option(None, "--color", help="Context color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the context"),
     fail_if_exists: bool = typer.Option(False, "--fail-if-exists", help="Fail if context already exists"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Create a new context in an operation."""
     async def _run() -> None:
@@ -76,7 +72,7 @@ def context_create(
                 glyph_id=glyph_id,
                 fail_if_exists=fail_if_exists,
             )
-            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context, verbose=verbose)
+            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context)
 
     asyncio.run(_run())
 
@@ -87,7 +83,6 @@ def context_update(
     description: str | None = typer.Option(None, "--description", help="Context description"),
     color: str | None = typer.Option(None, "--color", help="Context color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the context"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Update an existing context."""
     async def _run() -> None:
@@ -102,7 +97,7 @@ def context_update(
                 color=color,
                 glyph_id=glyph_id,
             )
-            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context, verbose=verbose)
+            print_result(context.model_dump(exclude_none=True) if hasattr(context, 'model_dump') else context)
 
     asyncio.run(_run())
 
@@ -111,12 +106,11 @@ def context_update(
 def context_delete(
     context_id: str = typer.Argument(..., help="Context ID"),
     delete_data: bool = typer.Option(True, "--delete-data", help="Also delete related data"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a context."""
     async def _run() -> None:
         async with get_client() as client:
             result = await client.operations.context_delete(context_id, delete_data=delete_data)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

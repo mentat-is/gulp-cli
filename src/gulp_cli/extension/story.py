@@ -7,6 +7,7 @@ import typer
 
 from gulp_cli.extension_helpers import call_custom_endpoint
 from gulp_cli.output import print_records, print_result
+from gulp_cli.config import get_runtime_verbose
 from gulp_cli.utils import comma_split, parse_json_option
 
 
@@ -87,7 +88,6 @@ def register_extension(
         req_id: str | None = typer.Option(None, "--req-id"),
         wait: bool = typer.Option(False, "--wait", help="Wait for completion when request is async"),
         timeout: int = typer.Option(120, "--timeout", min=0, help="Wait timeout in seconds (0 means no timeout)"),
-        verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
     ) -> None:
         """Extension: create a story object."""
 
@@ -129,7 +129,7 @@ def register_extension(
                     wait=wait,
                     timeout=timeout,
                 )
-                print_result(result, verbose=verbose)
+                print_result(result)
 
         asyncio.run(_run())
 
@@ -147,7 +147,6 @@ def register_extension(
         req_id: str | None = typer.Option(None, "--req-id"),
         wait: bool = typer.Option(False, "--wait", help="Wait for completion when request is async"),
         timeout: int = typer.Option(120, "--timeout", min=0, help="Wait timeout in seconds (0 means no timeout)"),
-        verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
     ) -> None:
         """Extension: update an existing story."""
 
@@ -206,7 +205,7 @@ def register_extension(
                     wait=wait,
                     timeout=timeout,
                 )
-                print_result(result, verbose=verbose)
+                print_result(result)
 
         asyncio.run(_run())
 
@@ -216,7 +215,6 @@ def register_extension(
         req_id: str | None = typer.Option(None, "--req-id"),
         wait: bool = typer.Option(False, "--wait", help="Wait for completion when request is async"),
         timeout: int = typer.Option(120, "--timeout", min=0, help="Wait timeout in seconds (0 means no timeout)"),
-        verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
     ) -> None:
         """Extension: delete a story by id."""
 
@@ -238,7 +236,7 @@ def register_extension(
                     wait=wait,
                     timeout=timeout,
                 )
-                print_result(result, verbose=verbose)
+                print_result(result)
 
         asyncio.run(_run())
 
@@ -247,7 +245,6 @@ def register_extension(
         operation_id: str,
         obj_id: str,
         req_id: str | None = typer.Option(None, "--req-id"),
-        verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
     ) -> None:
         """Extension: get a story by id."""
 
@@ -266,7 +263,7 @@ def register_extension(
                     path="/story_get_by_id",
                     params=params,
                 )
-                print_result(result, verbose=verbose)
+                print_result(result)
 
         asyncio.run(_run())
 
@@ -275,8 +272,6 @@ def register_extension(
         operation_id: str,
         flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
         req_id: str | None = typer.Option(None, "--req-id"),
-        as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
-        verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
     ) -> None:
         """Extension: list stories for an operation."""
 
@@ -297,14 +292,10 @@ def register_extension(
                     json_body=flt_obj,
                 )
 
-                if as_json or verbose:
-                    print_result(result, verbose=True)
-                    return
-
                 if isinstance(result, dict) and isinstance(result.get("data"), list):
-                    print_records(_story_rows(result.get("data", [])), title="Stories")
+                    print_result(result.get("data"), formatter=lambda d: print_records(_story_rows(d), title="Stories"))
                     return
 
-                print_result(result, verbose=True)
+                print_result(result)
 
         asyncio.run(_run())

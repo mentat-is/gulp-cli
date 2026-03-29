@@ -28,29 +28,22 @@ def _human_time(value: Any) -> str:
 
 
 @app.command("list")
-def user_list(
-    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
-) -> None:
+def user_list() -> None:
     async def _run() -> None:
         async with get_client() as client:
             users = await client.users.list()
-            if as_json:
-                print_result(users, verbose=verbose)
-            else:
-                print_result(users, verbose=verbose, formatter=lambda d: print_records(d, title="Users"))
+            print_result(users, formatter=lambda d: print_records(d, title="Users"))
 
     asyncio.run(_run())
 
 
 @app.command("get")
 def user_get(user_id: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             user = await client.users.get(user_id)
-            print_result(user, verbose=verbose)
+            print_result(user)
 
     asyncio.run(_run())
 
@@ -61,7 +54,6 @@ def user_create(
     password: str = typer.Option(..., "--password", "-p"),
     permission: str = typer.Option("read", "--permission", help="Comma-separated permissions"),
     email: str | None = typer.Option(None, "--email"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         permissions = comma_split(permission)
@@ -74,7 +66,7 @@ def user_create(
                 permission=permissions,
                 email=email,
             )
-            print_result(user, verbose=verbose)
+            print_result(user)
 
     asyncio.run(_run())
 
@@ -85,7 +77,6 @@ def user_update(
     password: str | None = typer.Option(None, "--password", "-p"),
     permission: str | None = typer.Option(None, "--permission", help="Comma-separated permissions"),
     email: str | None = typer.Option(None, "--email"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         payload: dict[str, Any] = {"user_id": user_id}
@@ -97,7 +88,7 @@ def user_update(
             payload["email"] = email
         async with get_client() as client:
             updated = await client.users.update(**payload)
-            print_result(updated, verbose=verbose)
+            print_result(updated)
 
     asyncio.run(_run())
 
@@ -105,12 +96,11 @@ def user_update(
 @app.command("delete")
 def user_delete(
     user_id: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             result = await client.users.delete(user_id)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -118,17 +108,12 @@ def user_delete(
 @app.command("session-list")
 def user_session_list(
     user_id: str | None = typer.Option(None, "--user-id", help="Filter by user ID (admin required for other users)."),
-    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List active user sessions via GET /user_session_list."""
 
     async def _run() -> None:
         async with get_client() as client:
             sessions = await client.users.session_list(user_id=user_id)
-            if as_json:
-                print_result(sessions, verbose=verbose)
-                return
 
             rows = []
             for sess in sessions:
@@ -137,7 +122,7 @@ def user_session_list(
                     "session_id": sess.get("id"),
                     "time_expire": _human_time(sess.get("time_expire")),
                 })
-            print_result(rows, verbose=verbose, formatter=lambda d: print_records(d, title="User Sessions"))
+            print_result(rows, formatter=lambda d: print_records(d, title="User Sessions"))
 
     asyncio.run(_run())
 
@@ -145,13 +130,12 @@ def user_session_list(
 @app.command("session-delete")
 def user_session_delete(
     session_id: str = typer.Argument(..., help="Session ID (token) to delete."),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete (force-logout) a user session via DELETE /user_session_delete."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.users.session_delete(session_id)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

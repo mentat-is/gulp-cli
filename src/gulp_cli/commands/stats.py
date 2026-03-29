@@ -439,14 +439,13 @@ def list_stats(
 @app.command("get")
 def get_stats(
     req_id: str = typer.Argument(..., help="Request stats ID / req_id"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get one GulpRequestStats object by request ID."""
 
     async def _run() -> None:
         async with get_client() as client:
             stats = await client.plugins.request_get(req_id)
-            print_result(stats, verbose=verbose)
+            print_result(stats)
 
     asyncio.run(_run())
 
@@ -456,7 +455,6 @@ def delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
     delete_all: bool = typer.Option(False, "--all", help="Delete all request stats in the operation (dangerous)"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete request stats using the server-side object_delete_bulk API."""
 
@@ -470,7 +468,7 @@ def delete_bulk(
                 obj_type="request_stats",
                 flt=flt_obj,
             )
-            print_result(deleted, verbose=verbose)
+            print_result(deleted)
 
     asyncio.run(_run())
 
@@ -483,7 +481,6 @@ def cancel_request(
         "--expire-now",
         help="Immediately expire and delete request stats entry after cancellation",
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Cancel a running request using the server-side request_cancel API."""
 
@@ -493,6 +490,6 @@ def cancel_request(
                 req_id_to_cancel=req_id,
                 expire_now=expire_now,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

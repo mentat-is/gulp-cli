@@ -10,6 +10,7 @@
     - [Add More Evidence to Existing Source](#add-more-evidence-to-existing-source)
   - [Request Stats Monitoring Workflows](#request-stats-monitoring-workflows)
     - [Monitor Ongoing Requests (Live)](#monitor-ongoing-requests-live)
+    - [Get One Request Stat By Id](#get-one-request-stat-by-id)
     - [Inspect All Request Stats Once](#inspect-all-request-stats-once)
     - [Focus on Failed Requests](#focus-on-failed-requests)
     - [Filter by User, Type, and Server](#filter-by-user-type-and-server)
@@ -48,6 +49,7 @@
   - [User \& Operation Management](#user--operation-management)
     - [Create Multi-User Investigation Environment](#create-multi-user-investigation-environment)
     - [Archive Investigation (Revoke Access)](#archive-investigation-revoke-access)
+    - [Inspect and Revoke User Sessions](#inspect-and-revoke-user-sessions)
   - [Advanced Workflows](#advanced-workflows)
     - [Full Forensic Investigation Pipeline](#full-forensic-investigation-pipeline)
     - [Batch Processing Multiple Operations](#batch-processing-multiple-operations)
@@ -362,10 +364,12 @@ gulp-cli collab highlight list incident-001
 
 ### Export Raw Collaboration Objects as JSON
 
+Use `--verbose` to get full JSON output globally.
+
 ```bash
-gulp-cli collab note list incident-001 --json
-gulp-cli collab link list incident-001 --json
-gulp-cli collab highlight list incident-001 --json
+gulp-cli --verbose collab note list incident-001
+gulp-cli --verbose collab link list incident-001
+gulp-cli --verbose collab highlight list incident-001
 ```
 
 ### Bulk Delete Collaboration Objects
@@ -931,7 +935,7 @@ gulp-cli acl make-private link-456 --obj-type link
 
 ---
 
-## Index Management Workflows
+## Index Management Workflows 
 
 ### Inspect Indexes
 
@@ -939,8 +943,8 @@ gulp-cli acl make-private link-456 --obj-type link
 # List all indexes
 gulp-cli db list-indexes
 
-# As JSON (pipe to jq)
-gulp-cli db list-indexes --json | jq '.[].name'
+# Full JSON output (pipe to jq)
+gulp-cli --verbose db list-indexes | jq '.[].name'
 ```
 
 ### Refresh After Ingestion
@@ -1119,9 +1123,8 @@ gulp-cli collab story update story-123 \
 gulp-cli collab story list incident-001
 
 # Full JSON output with filter
-gulp-cli collab story list incident-001 \
-  --flt '{"tags":["executive"]}' \
-  --json
+gulp-cli --verbose collab story list incident-001 \
+  --flt '{"tags":["executive"]}'
 
 # Retrieve one story by id
 gulp-cli collab story get incident-001 story-123

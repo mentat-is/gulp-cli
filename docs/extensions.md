@@ -67,7 +67,6 @@ Main options:
 - `--q-options`
 - `--wait`
 - `--timeout`
-- `--verbose`
 
 ---
 

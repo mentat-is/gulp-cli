@@ -8,6 +8,7 @@ from typing import Any
 CONFIG_DIR = Path.home() / ".config" / "gulp-cli"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 _AS_USER_OVERRIDE: ContextVar[str | None] = ContextVar("gulp_cli_as_user_override", default=None)
+_VERBOSE_OVERRIDE: ContextVar[bool] = ContextVar("gulp_cli_verbose_override", default=False)
 
 
 class CLIConfigError(Exception):
@@ -90,6 +91,14 @@ def set_runtime_as_user(user_name: str | None) -> None:
 
 def get_runtime_as_user() -> str | None:
     return _AS_USER_OVERRIDE.get()
+
+
+def set_runtime_verbose(verbose: bool) -> None:
+    _VERBOSE_OVERRIDE.set(bool(verbose))
+
+
+def get_runtime_verbose() -> bool:
+    return _VERBOSE_OVERRIDE.get()
 
 
 def get_saved_users() -> list[str]:

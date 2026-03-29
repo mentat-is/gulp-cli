@@ -6,6 +6,8 @@ from rich.console import Console
 from rich.json import JSON
 from rich.table import Table
 
+from gulp_cli.config import get_runtime_verbose
+
 console = Console()
 
 
@@ -53,7 +55,7 @@ def print_records(records: list[dict[str, Any]], title: str | None = None) -> No
 
 def print_result(
     data: Any,
-    verbose: bool = False,
+    verbose: bool | None = None,
     formatter: Callable[[Any], None] | None = None,
 ) -> None:
     """
@@ -61,9 +63,12 @@ def print_result(
     
     Args:
         data: The result data to print
-        verbose: If True, always print full JSON output
+        verbose: If True, always print full JSON output; if None, use global runtime verbose
         formatter: Callable that formats/prints the summary (called only if verbose=False)
     """
+    if verbose is None:
+        verbose = get_runtime_verbose()
+
     if verbose:
         print_json(data)
     elif formatter:

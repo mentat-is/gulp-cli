@@ -17,7 +17,6 @@ def glyph_create(
     img_path: str | None = typer.Option(None, "--img-path", help="Local path to glyph image (max 16kb)"),
     name: str | None = typer.Option(None, "--name", help="Glyph name"),
     private: bool = typer.Option(False, "--private", help="Create a private glyph"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Create a glyph from an image, or create by name only."""
 
@@ -36,7 +35,7 @@ def glyph_create(
                 response = await client._request("POST", "/glyph_create", params=params)
                 data = response.get("data", {})
 
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -46,7 +45,6 @@ def glyph_update(
     obj_id: str = typer.Argument(..., help="Glyph object id"),
     name: str | None = typer.Option(None, "--name", help="New glyph name"),
     img_path: str | None = typer.Option(None, "--img-path", help="New image path (max 16kb)"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Update an existing glyph."""
 
@@ -65,7 +63,7 @@ def glyph_update(
                 name=name,
                 img_path=img_path,
             )
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -73,14 +71,13 @@ def glyph_update(
 @app.command("delete")
 def glyph_delete(
     obj_id: str = typer.Argument(..., help="Glyph object id"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a glyph."""
 
     async def _run() -> None:
         async with get_client() as client:
             data = await client.collab.glyph_delete(obj_id=obj_id)
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -88,14 +85,13 @@ def glyph_delete(
 @app.command("get")
 def glyph_get(
     obj_id: str = typer.Argument(..., help="Glyph object id"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get one glyph by id."""
 
     async def _run() -> None:
         async with get_client() as client:
             data = await client.collab.glyph_get_by_id(obj_id=obj_id)
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -103,7 +99,6 @@ def glyph_get(
 @app.command("list")
 def glyph_list(
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpCollabFilter"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List glyphs, optionally filtered."""
 
@@ -113,8 +108,7 @@ def glyph_list(
             data = await client.collab.glyph_list(flt=flt_parsed)
             print_result(
                 data,
-                verbose=verbose,
-                formatter=lambda items: print_records(items, title="Glyphs"),
+                                formatter=lambda items: print_records(items, title="Glyphs"),
             )
 
     asyncio.run(_run())

@@ -23,7 +23,6 @@ def _source_row(source: dict[str, Any]) -> dict[str, Any]:
 def source_list(
     operation_id: str = typer.Argument(..., help="Operation ID"),
     context_id: str = typer.Argument(..., help="Context ID"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List sources in a context."""
     async def _run() -> None:
@@ -32,8 +31,7 @@ def source_list(
             items = [_source_row(src) for src in sources] if isinstance(sources, list) else [_source_row(sources)]
             print_result(
                 items,
-                verbose=verbose,
-                formatter=lambda data: print_records(data, title=f"Sources in {context_id}")
+                                formatter=lambda data: print_records(data, title=f"Sources in {context_id}")
             )
 
     asyncio.run(_run())
@@ -42,13 +40,12 @@ def source_list(
 @app.command("get")
 def source_get(
     source_id: str = typer.Argument(..., help="Source ID"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get source details."""
     async def _run() -> None:
         async with get_client() as client:
             source = await client.operations.source_get(source_id)
-            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source, verbose=verbose)
+            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source)
 
     asyncio.run(_run())
 
@@ -63,7 +60,6 @@ def source_create(
     color: str | None = typer.Option(None, "--color", help="Source color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the source"),
     fail_if_exists: bool = typer.Option(False, "--fail-if-exists", help="Fail if source already exists"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Create a new source in a context."""
     async def _run() -> None:
@@ -78,7 +74,7 @@ def source_create(
                 glyph_id=glyph_id,
                 fail_if_exists=fail_if_exists,
             )
-            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source, verbose=verbose)
+            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source)
 
     asyncio.run(_run())
 
@@ -89,7 +85,6 @@ def source_update(
     description: str | None = typer.Option(None, "--description", help="Source description"),
     color: str | None = typer.Option(None, "--color", help="Source color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the source"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Update an existing source."""
     async def _run() -> None:
@@ -104,7 +99,7 @@ def source_update(
                 color=color,
                 glyph_id=glyph_id,
             )
-            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source, verbose=verbose)
+            print_result(source.model_dump(exclude_none=True) if hasattr(source, 'model_dump') else source)
 
     asyncio.run(_run())
 
@@ -113,12 +108,11 @@ def source_update(
 def source_delete(
     source_id: str = typer.Argument(..., help="Source ID"),
     delete_data: bool = typer.Option(True, "--delete-data", help="Also delete related data"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a source."""
     async def _run() -> None:
         async with get_client() as client:
             result = await client.operations.source_delete(source_id, delete_data=delete_data)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

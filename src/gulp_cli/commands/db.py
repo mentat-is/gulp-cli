@@ -55,7 +55,6 @@ def rebase_by_query(
     script: str | None = typer.Option(None, "--script", help="Custom Painless script override"),
     wait: bool = typer.Option(False, "--wait", help="Wait for rebase completion with websocket-driven progress"),
     wait_timeout: int = typer.Option(300, "--wait-timeout", help="Seconds to wait when --wait is used"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Rebase document timestamps in an operation using update_by_query."""
 
@@ -80,7 +79,7 @@ def rebase_by_query(
                         f"Request did not receive STATS_CREATE within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s: "
                         + ", ".join(timed_out)
                     )
-                print_result(result, verbose=verbose)
+                print_result(result)
                 return
 
             with Progress(
@@ -121,7 +120,7 @@ def rebase_by_query(
                 )
                 req_id = result.get("req_id") if isinstance(result, dict) else None
                 if not req_id:
-                    print_result(result, verbose=verbose)
+                    print_result(result)
                     return
 
                 stats = await wait_for_request_stats(
@@ -130,26 +129,19 @@ def rebase_by_query(
                     wait_timeout,
                     ws_callback=_ws_callback,
                 )
-                print_result(stats, verbose=verbose)
+                print_result(stats)
 
     asyncio.run(_run())
 
 
 @app.command("list-indexes")
-def list_indexes(
-    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
-) -> None:
+def list_indexes() -> None:
     """List all OpenSearch datastreams/indexes (admin required)."""
 
     async def _run() -> None:
         async with get_client() as client:
             indexes = await client.db.list_indexes()
-            if as_json:
-                print_result(indexes, verbose=verbose)
-            else:
-                from gulp_cli.output import print_records
-                print_result(indexes, verbose=verbose, formatter=lambda d: print_records(d, title="Indexes"))
+            print_result(indexes, formatter=lambda d: print_records(d, title="Indexes"))
 
     asyncio.run(_run())
 
@@ -157,14 +149,13 @@ def list_indexes(
 @app.command("refresh-index")
 def refresh_index(
     index: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Refresh an OpenSearch index so new documents become searchable (ingest permission required)."""
 
     async def _run() -> None:
         async with get_client() as client:
             result = await client.db.refresh_index(index)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -174,7 +165,6 @@ def delete_index(
     index: str,
     keep_operation: bool = typer.Option(False, "--keep-operation", help="Do NOT delete the associated collab operation"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete an OpenSearch datastream/index and (by default) its collab operation. WARNING: all data will be lost."""
 
@@ -189,6 +179,6 @@ def delete_index(
                 index,
                 delete_operation=not keep_operation,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

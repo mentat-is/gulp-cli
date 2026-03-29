@@ -16,8 +16,6 @@ def list_files(
     context_id: str | None = typer.Option(None, "--context-id", help="Filter by context ID"),
     continuation_token: str | None = typer.Option(None, "--continuation-token", help="Pagination continuation token"),
     max_results: int = typer.Option(100, "--max-results", min=1, max=1000, help="Maximum results per page"),
-    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List files from the storage backend."""
 
@@ -31,10 +29,10 @@ def list_files(
             )
 
             files = result.get("files") if isinstance(result, dict) else None
-            if as_json or not isinstance(files, list):
-                print_result(result, verbose=verbose)
+            if not isinstance(files, list):
+                print_result(result)
             else:
-                print_result(files, verbose=verbose, formatter=lambda d: print_records(d, title="Storage Files"))
+                print_result(files, formatter=lambda d: print_records(d, title="Storage Files"))
                 token = result.get("continuation_token")
                 if token:
                     print_warning(
@@ -50,7 +48,6 @@ def get_file(
     operation_id: str,
     storage_id: str,
     output_path: str = typer.Option(..., "--output", help="Local output file path"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Download a storage file by storage ID."""
 
@@ -61,7 +58,7 @@ def get_file(
                 storage_id=storage_id,
                 output_path=output_path,
             )
-            print_result({"output_path": path}, verbose=verbose)
+            print_result({"output_path": path})
 
     asyncio.run(_run())
 
@@ -70,7 +67,6 @@ def get_file(
 def delete_by_id(
     operation_id: str,
     storage_id: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a storage file by storage ID."""
 
@@ -80,7 +76,7 @@ def delete_by_id(
                 operation_id=operation_id,
                 storage_id=storage_id,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -91,7 +87,6 @@ def delete_by_tags(
     context_id: str | None = typer.Option(None, "--context-id", help="Filter by context ID"),
     delete_all: bool = typer.Option(False, "--all", help="Delete files globally without any operation/context filter"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt when using --all"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete storage files by operation/context tags."""
 
@@ -111,6 +106,6 @@ def delete_by_tags(
                 operation_id=operation_id,
                 context_id=context_id,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())

@@ -51,7 +51,6 @@ def plugin_list(
         "--plugin-type",
         help="Filter by functional plugin type",
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List all available plugins."""
     async def _run() -> None:
@@ -62,8 +61,7 @@ def plugin_list(
             items = [_plugin_row(p) for p in plugins]
             print_result(
                 items,
-                verbose=verbose,
-                formatter=lambda data: print_records(data, title="Installed Plugins")
+                                formatter=lambda data: print_records(data, title="Installed Plugins")
             )
 
     asyncio.run(_run())
@@ -71,7 +69,6 @@ def plugin_list(
 
 @app.command("list-ui")
 def plugin_list_ui(
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List all available UI plugins."""
     async def _run() -> None:
@@ -80,8 +77,7 @@ def plugin_list_ui(
             items = [_plugin_row(p) for p in plugins]
             print_result(
                 items,
-                verbose=verbose,
-                formatter=lambda data: print_records(data, title="Available UI Plugins")
+                                formatter=lambda data: print_records(data, title="Available UI Plugins")
             )
 
     asyncio.run(_run())
@@ -96,7 +92,6 @@ def plugin_upload(
     fail_if_exists: bool = typer.Option(
         False, "--fail-if-exists", help="Fail if plugin file already exists"
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Upload a plugin file."""
     async def _run() -> None:
@@ -112,7 +107,7 @@ def plugin_upload(
                 plugin_type=plugin_type,
                 fail_if_exists=fail_if_exists,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -123,13 +118,12 @@ def plugin_delete(
     plugin_type: Literal["default", "extension", "ui"] = typer.Option(
         "default", "--type", help="Plugin type category"
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a plugin file."""
     async def _run() -> None:
         async with get_client() as client:
             result = await client.plugins.delete(filename, plugin_type=plugin_type)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -141,7 +135,6 @@ def plugin_download(
     plugin_type: Literal["default", "extension", "ui"] = typer.Option(
         "default", "--type", help="Plugin type category"
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Download a plugin file."""
     async def _run() -> None:
@@ -152,6 +145,6 @@ def plugin_download(
                 plugin_type=plugin_type,
             )
             data = {"file": result}
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())

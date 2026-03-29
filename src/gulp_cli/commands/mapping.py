@@ -29,7 +29,6 @@ def _mapping_row(mapping: dict[str, Any]) -> dict[str, Any]:
 
 @app.command("list")
 def mapping_list(
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List all available mapping files."""
     async def _run() -> None:
@@ -38,8 +37,7 @@ def mapping_list(
             items = [_mapping_row(m) for m in mappings]
             print_result(
                 items,
-                verbose=verbose,
-                formatter=lambda data: print_records(data, title="Available Mapping Files")
+                                formatter=lambda data: print_records(data, title="Available Mapping Files")
             )
 
     asyncio.run(_run())
@@ -51,7 +49,6 @@ def mapping_upload(
     fail_if_exists: bool = typer.Option(
         False, "--fail-if-exists", help="Fail if mapping file already exists"
     ),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Upload a mapping file."""
     async def _run() -> None:
@@ -66,7 +63,7 @@ def mapping_upload(
                 file_path,
                 fail_if_exists=fail_if_exists,
             )
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -74,13 +71,12 @@ def mapping_upload(
 @app.command("delete")
 def mapping_delete(
     filename: str = typer.Argument(..., help="Mapping filename to delete, e.g., 'custom_mapping.json'"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete a mapping file."""
     async def _run() -> None:
         async with get_client() as client:
             result = await client.plugins.mapping_delete(filename)
-            print_result(result, verbose=verbose)
+            print_result(result)
 
     asyncio.run(_run())
 
@@ -89,13 +85,12 @@ def mapping_delete(
 def mapping_download(
     filename: str = typer.Argument(..., help="Mapping filename to download, e.g., 'windows.json'"),
     output_path: str = typer.Argument(..., help="Local path to save the mapping file"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Download a mapping file."""
     async def _run() -> None:
         async with get_client() as client:
             result = await client.plugins.mapping_download(filename, output_path)
             data = {"file": result}
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())

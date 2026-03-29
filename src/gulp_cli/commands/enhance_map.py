@@ -17,7 +17,6 @@ def enhance_map_create(
     plugin: str = typer.Argument(..., help="Plugin name"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID to map"),
     color: str | None = typer.Option(None, "--color", help="Color to map (e.g. #ff0000)"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Create an enhance map entry for plugin+event code."""
 
@@ -32,7 +31,7 @@ def enhance_map_create(
                 glyph_id=glyph_id,
                 color=color,
             )
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -42,7 +41,6 @@ def enhance_map_update(
     obj_id: str = typer.Argument(..., help="Enhance map object id"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="New glyph ID"),
     color: str | None = typer.Option(None, "--color", help="New color"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Update an enhance map entry."""
 
@@ -56,7 +54,7 @@ def enhance_map_update(
                 glyph_id=glyph_id,
                 color=color,
             )
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -64,14 +62,13 @@ def enhance_map_update(
 @app.command("delete")
 def enhance_map_delete(
     obj_id: str = typer.Argument(..., help="Enhance map object id"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Delete an enhance map entry."""
 
     async def _run() -> None:
         async with get_client() as client:
             data = await client.plugins.enhance_map_delete(obj_id=obj_id)
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -79,14 +76,13 @@ def enhance_map_delete(
 @app.command("get")
 def enhance_map_get(
     obj_id: str = typer.Argument(..., help="Enhance map object id"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """Get one enhance map entry by id."""
 
     async def _run() -> None:
         async with get_client() as client:
             data = await client.plugins.enhance_map_get(obj_id=obj_id)
-            print_result(data, verbose=verbose)
+            print_result(data)
 
     asyncio.run(_run())
 
@@ -94,7 +90,6 @@ def enhance_map_get(
 @app.command("list")
 def enhance_map_list(
     flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpCollabFilter"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     """List enhance map entries, optionally filtered."""
 
@@ -104,8 +99,7 @@ def enhance_map_list(
             data = await client.plugins.enhance_map_list(flt=flt_parsed)
             print_result(
                 data,
-                verbose=verbose,
-                formatter=lambda items: print_records(items, title="Enhance Document Maps"),
+                                formatter=lambda items: print_records(items, title="Enhance Document Maps"),
             )
 
     asyncio.run(_run())

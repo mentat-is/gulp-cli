@@ -5,6 +5,7 @@ from glob import glob
 from pathlib import Path
 from typing import Any
 
+from gulp_cli.config import get_runtime_verbose
 import typer
 from gulp_sdk.websocket import WSMessage, WSMessageType
 from rich.markup import escape
@@ -72,7 +73,6 @@ async def _wait_for_completion(
     client: Any,
     file_req_map: dict[str, str],
     timeout: int,
-    verbose: bool,
 ) -> list[dict[str, Any]]:
     """Wait for every ingest request to reach a terminal status via websocket only.
 
@@ -253,7 +253,7 @@ async def _wait_for_completion(
 
             if state is None:
                 results.append({"file": file_path, "req_id": req_id, "status": "unknown"})
-            elif verbose:
+            elif get_runtime_verbose():
                 results.append(
                     {
                         "file": file_path,
@@ -312,11 +312,6 @@ def ingest_file(
         ),
     ),
     wait_timeout: int = typer.Option(300, "--wait-timeout", help="Seconds to wait for completion (only used with --wait)"),
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        help="Print complete result JSON instead of summary",
-    ),
 ) -> None:
     """Ingest one or more files (supports glob patterns).
 
@@ -382,13 +377,13 @@ def ingest_file(
                         },
                     )
                     previews.append({"file": file_path, "preview": data})
-                print_result(previews, verbose=verbose)
+                print_result(previews)
                 return
 
             if reset_operation:
                 await client.operations.delete(operation_id)
                 op = await client.operations.create(name=operation_id)
-                if not verbose:
+                if not get_runtime_verbose():
                     print_warning(
                         f"Operation {operation_id} reset (deleted and recreated)."
                     )
@@ -419,19 +414,19 @@ def ingest_file(
 
             if wait:
                 # --wait: block until terminal status via websocket
-                results = await _wait_for_completion(client, file_req_map, wait_timeout, verbose)
+                results = await _wait_for_completion(client, file_req_map, wait_timeout)
             else:
                 # Default: keep websocket alive until backend confirms every
                 # request as registered (STATS_CREATE event per req_id).
                 req_ids = list(file_req_map.values())
                 timed_out = await _wait_for_stats_create(client, req_ids)
-                if timed_out and not verbose:
+                if timed_out and not get_runtime_verbose():
                     print_warning(
                         f"{len(timed_out)} request(s) did not receive STATS_CREATE "
                         f"within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s — backend may still be processing: "
                         + ", ".join(timed_out)
                     )
-                if verbose:
+                if get_runtime_verbose():
                     results = [
                         {
                             "file": fp,
@@ -447,6 +442,6 @@ def ingest_file(
                         for fp, rid in file_req_map.items()
                     ]
 
-            print_result(results, verbose=verbose)
+            print_result(results)
 
     asyncio.run(_run())

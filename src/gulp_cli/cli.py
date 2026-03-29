@@ -19,7 +19,7 @@ from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.storage import app as storage_app
 from gulp_cli.commands.user_group import app as user_group_app
 from gulp_cli.commands.users import app as user_app
-from gulp_cli.config import set_runtime_as_user
+from gulp_cli.config import set_runtime_as_user, set_runtime_verbose
 from gulp_cli.extensions import load_extensions
 
 app = typer.Typer(
@@ -35,8 +35,14 @@ def main(
         "--as-user",
         help="Use the saved session of a different already-logged-in user for this command only.",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        help="Print complete result JSON instead of summary (global override).",
+    ),
 ) -> None:
     set_runtime_as_user(as_user)
+    set_runtime_verbose(verbose)
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(user_app, name="user")

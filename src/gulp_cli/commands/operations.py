@@ -49,14 +49,13 @@ def _operation_list_row(operation: dict[str, Any]) -> dict[str, Any]:
 @app.command("list")
 def operation_list(
     limit: int = typer.Option(100, "--limit", min=1, max=1000),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             items = []
             async for op in client.operations.list(limit=limit):
                 items.append(_operation_list_row(op.model_dump(exclude_none=True)))
-            print_result(items, verbose=verbose, formatter=lambda data: print_records(data, title="Operations"))
+            print_result(items, formatter=lambda data: print_records(data, title="Operations"))
 
     asyncio.run(_run())
 
@@ -64,12 +63,11 @@ def operation_list(
 @app.command("get")
 def operation_get(
     operation_id: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             operation = await client.operations.get(operation_id)
-            print_result(operation.model_dump(exclude_none=True), verbose=verbose)
+            print_result(operation.model_dump(exclude_none=True))
 
     asyncio.run(_run())
 
@@ -78,12 +76,11 @@ def operation_get(
 def operation_create(
     name: str,
     description: str | None = typer.Option(None, "--description"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             operation = await client.operations.create(name, description=description)
-            print_result(operation.model_dump(exclude_none=True), verbose=verbose)
+            print_result(operation.model_dump(exclude_none=True))
 
     asyncio.run(_run())
 
@@ -92,12 +89,11 @@ def operation_create(
 def operation_update(
     operation_id: str,
     description: str = typer.Option(..., "--description"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             operation = await client.operations.update(operation_id, description=description)
-            print_result(operation.model_dump(exclude_none=True), verbose=verbose)
+            print_result(operation.model_dump(exclude_none=True))
 
     asyncio.run(_run())
 
@@ -105,11 +101,10 @@ def operation_update(
 @app.command("delete")
 def operation_delete(
     operation_id: str,
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             ok = await client.operations.delete(operation_id)
-            print_result({"id": operation_id, "deleted": ok}, verbose=verbose)
+            print_result({"id": operation_id, "deleted": ok})
 
     asyncio.run(_run())

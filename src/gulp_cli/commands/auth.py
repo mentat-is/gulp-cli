@@ -18,7 +18,6 @@ def login(
     username: str = typer.Option(..., "--username", "-u", help="Username"),
     password: str = typer.Option(..., "--password", "-p", help="Password"),
     force: bool = typer.Option(True, help="Invalidate existing sessions for this user"),
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with GulpClient(url) as client:
@@ -39,15 +38,13 @@ def login(
                     "user_id": token_session.user_id,
                     "expires_at": token_session.expires_at,
                 },
-                verbose=verbose,
-            )
+                            )
 
     asyncio.run(_run())
 
 
 @app.command("logout")
 def logout(
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     session = get_selected_session()
     url = str(session.get("url") or "").strip()
@@ -59,18 +56,17 @@ def logout(
             async with GulpClient(url, token=token) as client:
                 await client.auth.logout()
         delete_session(username)
-        print_result({"status": "ok", "message": f"Logged out {username}", "username": username}, verbose=verbose)
+        print_result({"status": "ok", "message": f"Logged out {username}", "username": username})
 
     asyncio.run(_run())
 
 
 @app.command("whoami")
 def whoami(
-    verbose: bool = typer.Option(False, "--verbose", help="Print complete result JSON instead of summary"),
 ) -> None:
     async def _run() -> None:
         async with get_client() as client:
             me = await client.users.me()
-            print_result(me, verbose=verbose)
+            print_result(me)
 
     asyncio.run(_run())

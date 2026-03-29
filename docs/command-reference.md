@@ -12,13 +12,14 @@ Commands are organized hierarchically (e.g., `gulp-cli auth login`). This refere
 gulp-cli <group> <command> [OPTIONS] [ARGUMENTS]
 ```
 
-Global option available on every command:
+Global options available on every command:
 
 ```bash
-gulp-cli --as-user USER_NAME <group> <command> ...
+gulp-cli --verbose --as-user USER_NAME <group> <command> ...
 ```
 
-`--as-user` uses a different already-saved login session for the current command only.
+- `--as-user` uses a different already-saved login session (**user must be already logged-in with `auth`**)for the current command only.
+- `--verbose` prints full JSON output instead of the standard summary/table output.
 
 ---
 
@@ -214,8 +215,6 @@ gulp-cli user session-list [OPTIONS]
 
 **Options:**
 - `--user-id TEXT` — Optional user filter; admin required for other users
-- `--json` — Output raw JSON
-- `--verbose` — Print complete result JSON instead of summary
 
 **Examples:**
 ```bash
@@ -239,9 +238,6 @@ gulp-cli user session-delete SESSION_ID [OPTIONS]
 
 **Arguments:**
 - `SESSION_ID` — Session ID to delete
-
-**Options:**
-- `--verbose` — Print complete result JSON instead of summary
 
 **Examples:**
 ```bash
@@ -762,7 +758,6 @@ gulp-cli query sigma-zip OPERATION_ID --zip-file PATH [OPTIONS]
 - `--q-options TEXT` — `GulpQueryParameters` JSON object
 - `--wait` — Wait for completion
 - `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
-- `--verbose` — Print complete result JSON
 
 **Examples:**
 ```bash
@@ -847,12 +842,11 @@ gulp-cli stats get REQ_ID [OPTIONS]
 ```
 
 **Options:**
-- `--verbose` — Print complete result JSON instead of summary
 
 **Examples:**
 ```bash
 gulp-cli stats get 903546ff-c01e-4875-a585-d7fa34a0d237
-gulp-cli --as-user admin stats get 903546ff-c01e-4875-a585-d7fa34a0d237 --verbose
+gulp-cli --verbose --as-user admin stats get 903546ff-c01e-4875-a585-d7fa34a0d237
 ```
 
 ---
@@ -1170,7 +1164,6 @@ gulp-cli collab note list OPERATION_ID [OPTIONS]
 ```
 
 **Options:**
-- `--json` — Output raw JSON instead of the compact default table
 
 **Default columns:**
 - `id`, `operation_id`, `user_id`, `server_id`, `context_id`, `source_id`, `time_pin`, `text`
@@ -1178,7 +1171,7 @@ gulp-cli collab note list OPERATION_ID [OPTIONS]
 **Examples:**
 ```bash
 gulp-cli collab note list incident-001
-gulp-cli collab note list incident-001 --json
+gulp-cli --verbose collab note list incident-001
 ```
 
 ---
@@ -1291,8 +1284,6 @@ List links in operation.
 gulp-cli collab link list OPERATION_ID [OPTIONS]
 ```
 
-**Options:**
-- `--json` — Output raw JSON instead of the compact default table
 
 **Default columns:**
 - `id`, `operation_id`, `user_id`, `server_id`, `doc_id_from`, `doc_ids`
@@ -1300,7 +1291,7 @@ gulp-cli collab link list OPERATION_ID [OPTIONS]
 **Examples:**
 ```bash
 gulp-cli collab link list incident-001
-gulp-cli collab link list incident-001 --json
+gulp-cli --verbose collab link list incident-001
 ```
 
 ---
@@ -1404,8 +1395,6 @@ List highlights in operation.
 gulp-cli collab highlight list OPERATION_ID [OPTIONS]
 ```
 
-**Options:**
-- `--json` — Output raw JSON instead of the compact default table
 
 **Default columns:**
 - `id`, `operation_id`, `user_id`, `server_id`, `time_range`
@@ -1413,7 +1402,7 @@ gulp-cli collab highlight list OPERATION_ID [OPTIONS]
 **Examples:**
 ```bash
 gulp-cli collab highlight list incident-001
-gulp-cli collab highlight list incident-001 --json
+gulp-cli --verbose collab highlight list incident-001
 ```
 
 ---
@@ -1602,7 +1591,6 @@ gulp-cli collab story list OPERATION_ID [OPTIONS]
 
 **Options:**
 - `--flt TEXT` — `GulpCollabFilter` JSON object
-- `--json` — Output raw JSON
 
 **Examples:**
 ```bash
@@ -1620,13 +1608,10 @@ List all OpenSearch datastreams/indexes (admin required).
 gulp-cli db list-indexes [OPTIONS]
 ```
 
-**Options:**
-- `--json` — Output raw JSON
-
 **Examples:**
 ```bash
 gulp-cli db list-indexes
-gulp-cli db list-indexes --json
+gulp-cli --verbose db list-indexes
 ```
 
 ---
@@ -1694,12 +1679,11 @@ gulp-cli user-group list [OPTIONS]
 
 **Options:**
 - `--flt TEXT` — `GulpCollabFilter` JSON for filtering
-- `--json` — Output raw JSON
 
 **Examples:**
 ```bash
 gulp-cli user-group list
-gulp-cli user-group list --json
+gulp-cli user-group list --verbose
 gulp-cli user-group list --flt '{"names":["analysts"]}'
 ```
 
@@ -1935,7 +1919,6 @@ gulp-cli storage list-files [OPTIONS]
 - `--context-id TEXT` — Filter by context ID
 - `--continuation-token TEXT` — Pagination token from previous response
 - `--max-results INTEGER` — Results per page (default: `100`, max: `1000`)
-- `--json` — Output raw JSON
 
 **Examples:**
 ```bash
@@ -1946,7 +1929,7 @@ gulp-cli storage list-files --operation-id incident-001
 gulp-cli storage list-files --operation-id incident-001 --continuation-token abc123
 
 # Global list (admin)
-gulp-cli storage list-files --json
+gulp-cli storage list-files --verbose
 ```
 
 ---
@@ -2188,24 +2171,6 @@ gulp-cli glyph get OBJ_ID
 
 ```bash
 gulp-cli glyph list [--flt '{"private":false}']
-```
-
----
-
-## Global Options
-
-Available on all commands:
-
-- `--help` — Show help message
-- `--verbose` — Enable verbose output
-- `--no-color` — Disable colored output
-- `--output-format TEXT` — Output format (table, json, text)
-
-**Examples:**
-```bash
-gulp-cli operation list --help
-gulp-cli operation list --verbose
-gulp-cli operation list --output-format json
 ```
 
 ---

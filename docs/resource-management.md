@@ -33,7 +33,7 @@ Output:
 With verbose output (full JSON):
 
 ```bash
-gulp context list test_operation --verbose
+gulp --verbose context list test_operation
 ```
 
 ### Get Context Details
@@ -378,17 +378,17 @@ gulp-cli glyph delete <glyph_id>
 
 ## Verbose Output
 
-All commands support the `--verbose` flag to show the complete JSON response:
+`--verbose` is a global option available on every command and shows the complete JSON response (instead of the default table/summary output):
 
 ```bash
 # Show full JSON instead of formatted table
-gulp context list test_operation --verbose
+gulp-cli --verbose context list test_operation
 
 # Show detailed context object
-gulp context get ctx_dc01_1234567890 --verbose
+gulp-cli --verbose context get ctx_dc01_1234567890
 
 # Show plugin metadata
-gulp plugin list --verbose
+gulp-cli plugin list
 ```
 
 ## Error Handling
@@ -408,25 +408,25 @@ Complete example setting up a multi-host investigation:
 
 ```bash
 # 1. Create operation
-gulp operation create "Ransomware Investigation" --description "APT ransomware incident response"
+gulp-cli operation create "Ransomware Investigation" --description "APT ransomware incident response"
 
 # 2. Create contexts for each affected system
-gulp context create ransomware_investigation "DC01" --color "#FF0000"
-gulf context create ransomware_investigation "FileServer" --color "#FF6600"
-gulf context create ransomware_investigation "Workstation" --color "#FFFF00"
+gulp-cli context create ransomware_investigation "DC01" --color "#FF0000"
+gulp-cli context create ransomware_investigation "FileServer" --color "#FF6600"
+gulp-cli context create ransomware_investigation "Workstation" --color "#FFFF00"
 
 # 3. Create sources for each system's logs
-gulf source create ransomware_investigation ctx_dc01_xxx "Security Events" --plugin win_evtx
-gulf source create ransomware_investigation ctx_dc01_xxx "Sysmon" --plugin win_evtx
+gulp-cli source create ransomware_investigation ctx_dc01_xxx "Security Events" --plugin win_evtx
+gulp-cli source create ransomware_investigation ctx_dc01_xxx "Sysmon" --plugin win_evtx
 
-gulf source create ransomware_investigation ctx_fileserv_xxx "Security Events" --plugin win_evtx
-gulf source create ransomware_investigation ctx_fileserv_xxx "File Access" --plugin win_evtx
+gulp-cli source create ransomware_investigation ctx_fileserv_xxx "Security Events" --plugin win_evtx
+gulp-cli source create ransomware_investigation ctx_fileserv_xxx "File Access" --plugin win_evtx
 
 # 4. Upload any custom mapping files needed
-gulf mapping upload custom_ransomware_indicators.json
+gulp-cli mapping upload custom_ransomware_indicators.json
 
 # 5. Ingest data using the sources
-gulf ingest file ransomware_investigation src_security_xxx win_evtx samples/win_evtx/Security.evtx
+gulp-cli ingest file ransomware_investigation src_security_xxx win_evtx samples/win_evtx/Security.evtx
 ```
 
 ---

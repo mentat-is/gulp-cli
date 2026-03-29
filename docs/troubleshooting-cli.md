@@ -291,7 +291,7 @@ Sigma query executed but no matching events
 
 4. **Enable verbose output:**
    ```bash
-   gulp-cli query sigma my_op --rule-file rule.yml --verbose
+   gulp-cli --verbose query sigma my_op --rule-file rule.yml 
    ```
 
 ---
@@ -614,12 +614,8 @@ pip install -e /gulp/gulp-cli --force-reinstall
 ### Enable verbose/debug output:
 
 ```bash
-# Most commands support --verbose
-gulp-cli operation list --verbose
-
-# Or set environment variable
-export GULP_DEBUG=1
-gulp-cli operation list
+# All commands support --verbose
+gulp-cli --verbose operation list
 ```
 
 ### Check logs:

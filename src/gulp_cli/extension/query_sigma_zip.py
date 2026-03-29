@@ -79,11 +79,6 @@ def register_extension(
             min=0,
             help="Wait timeout in seconds (0 means no timeout)",
         ),
-        verbose: bool = typer.Option(
-            False,
-            "--verbose",
-            help="Print complete result JSON instead of summary",
-        ),
     ) -> None:
         """Extension: query documents using sigma rules from a ZIP archive."""
 
@@ -111,6 +106,6 @@ def register_extension(
                     wait=wait,
                     timeout=timeout,
                 )
-                print_result(result, verbose=verbose)
+                print_result(result)
 
         asyncio.run(_run())
