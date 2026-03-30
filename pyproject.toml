@@ -2,9 +2,15 @@
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools_scm]
+write_to = "src/gulp_cli/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+
 [project]
 name = "gulp-cli"
-version = "0.1.0"
+dynamic = ["version"]
+authors = [{ name = "Mentat", email = "info@mentat.is" }]
 description = "Command-line client for gULP"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,14 +18,12 @@ dependencies = [
     "typer>=0.12.5",
     "rich>=13.7.1",
     "click==8.1.7",
-    "gulp-sdk @ git+https://github.com/mentat-is/gulp-sdk.git@develop",
+    "gulp-sdk",
 ]
 
 [project.scripts]
 gulp-cli = "gulp_cli.__main__:main"
 
 [tool.setuptools]
+packages = ["gulp_cli"]
 package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
