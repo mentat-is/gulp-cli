@@ -24,6 +24,6 @@ dependencies = [
 [project.scripts]
 gulp-cli = "gulp_cli.__main__:main"
 
-[tool.setuptools]
-packages = ["gulp_cli"]
-package-dir = {"" = "src"}
+[tool.setuptools.packages.find]
+where = ["src"]
+
