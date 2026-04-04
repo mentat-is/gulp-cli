@@ -23,3 +23,5 @@ build
 .coverage
 site
 _version.py
+dist
+

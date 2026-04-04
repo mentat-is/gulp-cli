@@ -30,8 +30,6 @@ jobs:
 
       - name: Build artifacts
         run: |
-          # Usa sempre git commit hash (node-and-date) per avere versioni univoche in dev/CI
-          export SETUPTOOLS_SCM_LOCAL=node-and-date
           python -m build
 
       - name: Check package
@@ -60,8 +58,6 @@ jobs:
 
       - name: Build
         run: |
-          # Usa sempre git commit hash (node-and-date) anche per rilascio/test
-          export SETUPTOOLS_SCM_LOCAL=node-and-date
           python -m build
 
       - name: Publish to PyPI
