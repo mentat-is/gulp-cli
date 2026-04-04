@@ -34,10 +34,10 @@ def _show_versions(value: bool) -> None:
     if not value:
         return
 
-    from gulp_cli._version import __version__ as cli_version
+    from gulp_cli._version import __version__, __commit_id__
 
     sdk_version = GulpClient("http://localhost:8080").version()
-    print(f"gulp-cli version: {cli_version}")
+    print(f"gulp-cli version: {__version__} ({__commit_id__})" if __commit_id__ else __version__)
     print(f"gulp-sdk version: {sdk_version}")
     raise typer.Exit()
 
