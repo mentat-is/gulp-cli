@@ -19,6 +19,8 @@ from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.storage import app as storage_app
 from gulp_cli.commands.user_group import app as user_group_app
 from gulp_cli.commands.users import app as user_app
+from gulp_sdk.client import GulpClient
+
 from gulp_cli.config import set_runtime_as_user, set_runtime_verbose
 from gulp_cli.extensions import load_extensions
 
@@ -28,7 +30,19 @@ app = typer.Typer(
 )
 
 
-@app.callback()
+def _show_versions(value: bool) -> None:
+    if not value:
+        return
+
+    from gulp_cli._version import __version__ as cli_version
+
+    sdk_version = GulpClient("http://localhost:8080").version()
+    print(f"gulp-cli version: {cli_version}")
+    print(f"gulp-sdk version: {sdk_version}")
+    raise typer.Exit()
+
+
+@app.callback(invoke_without_command=True)
 def main(
     as_user: str | None = typer.Option(
         None,
@@ -39,6 +53,13 @@ def main(
         False,
         "--verbose",
         help="Print complete result JSON instead of summary (global override).",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_show_versions,
+        is_eager=True,
+        help="Show CLI and SDK versions and exit.",
     ),
 ) -> None:
     set_runtime_as_user(as_user)
