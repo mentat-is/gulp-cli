@@ -54,7 +54,7 @@ def rebase_by_query(
     flt: str | None = typer.Option(None, "--flt", help="GulpQueryFilter JSON object"),
     script: str | None = typer.Option(None, "--script", help="Custom Painless script override"),
     wait: bool = typer.Option(False, "--wait", help="Wait for rebase completion with websocket-driven progress"),
-    wait_timeout: int = typer.Option(300, "--wait-timeout", help="Seconds to wait when --wait is used"),
+    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait when --wait is used"),
 ) -> None:
     """Rebase document timestamps in an operation using update_by_query."""
 

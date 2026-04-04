@@ -411,9 +411,10 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
 - `--reset-operation` — Delete and recreate the operation before ingest starts
+- `--create-operation` — Create operation automatically when it does not exist
 - `--preview` — Run preview-only ingestion (no persistence)
 - `--wait` — Wait for completion with progress
-- `--wait-timeout INTEGER` — Timeout in seconds for `--wait` mode
+- `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
 ```bash
@@ -449,22 +450,23 @@ gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --wait
 Add files to an existing source.
 
 ```bash
-gulp-cli ingest file-to-source OPERATION_ID SOURCE_ID PLUGIN FILE [FILE...] [OPTIONS]
+gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 ```
 
 **Arguments:**
-- `OPERATION_ID` — Target operation
 - `SOURCE_ID` — Source ID
-- `PLUGIN` — Plugin name
-- `FILE` — File path
+- `FILE` — File path or glob pattern (multiple allowed)
 
 **Options:**
-- `--plugin-params TEXT` — JSON plugin parameters
-- `--wait` — Wait for completion
+- `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults)
+- `--flt TEXT` — JSON object for GulpIngestionFilter
+- `--wait` — Wait for completion with progress
+- `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
 ```bash
-gulp-cli ingest file-to-source my_op source123 win_evtx /new/System.evtx --wait
+gulp-cli ingest file-to-source source123 /new/System.evtx --wait
+gulp-cli ingest file-to-source source123 '/new/*.evtx'
 ```
 
 ---
@@ -482,42 +484,51 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 - `ZIP_FILE` — Path to ZIP file
 
 **Options:**
+- `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
+- `--flt TEXT` — JSON object for `GulpIngestionFilter`
+- `--create-operation` — Create operation automatically when it does not exist
 - `--wait` — Wait for completion
+- `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
 ```bash
 gulp-cli ingest zip my_op /data/evidence.zip --wait
+gulp-cli ingest zip my_op /data/evidence.zip --create-operation
 ```
 
 ---
 
-#### `zip-prepare`
+#### `raw`
 
-Prepare a ZIP archive for ingestion.
+Ingest raw payload chunks into an operation.
 
 ```bash
-gulp-cli ingest zip-prepare OUTPUT_ZIP PLUGIN FILE [FILE...] [OPTIONS]
+gulp-cli ingest raw OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
-- `OUTPUT_ZIP` — Output ZIP file path
-- `PLUGIN` — Plugin name
-- `FILE` — Files to include (multiple allowed)
+- `OPERATION_ID` — Target operation
 
 **Options:**
-- `--original-path TEXT` — Original path for each file (multiple allowed)
-- `--tags TEXT` — Comma-separated tags
+- `--data TEXT` — Raw payload text (JSON recommended)
+- `--data-file TEXT` — Path to file containing raw payload
+- `--plugin TEXT` — Plugin used to process the raw payload (default: `raw`)
+- `--plugin-params TEXT` — JSON object for `plugin_params`
+- `--flt TEXT` — JSON object for `GulpIngestionFilter`
+- `--req-id TEXT` — Optional request ID for chunked ingestion
+- `--last` — Mark this payload as the last raw chunk
+- `--create-operation` — Create operation automatically when it does not exist
+- `--wait` — Wait for completion
+- `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
 ```bash
-gulp-cli ingest zip-prepare evidence.zip win_evtx System.evtx Security.evtx
-
-gulp-cli ingest zip-prepare evidence.zip win_evtx \
-  /data/System.evtx /data/Security.evtx \
-  --tags "production,critical"
+gulp-cli ingest raw my_op --data '[{"id":"doc-1","@timestamp":"2026-01-01T00:00:00Z"}]' --wait
+gulp-cli ingest raw my_op --data-file /tmp/raw_chunk.json --last --wait
 ```
 
 ---
+
 
 ## Query (`query`)
 
@@ -972,7 +983,7 @@ gulp-cli db rebase-by-query OPERATION_ID --offset-msec OFFSET [OPTIONS]
 - `--flt TEXT` — `GulpQueryFilter` JSON object to restrict documents
 - `--script TEXT` — Custom Painless script override
 - `--wait` — Wait for completion with websocket-driven progress
-- `--wait-timeout INTEGER` — Timeout in seconds when `--wait` is used
+- `--timeout INTEGER` — Timeout in seconds when `--wait` is used
 
 **Examples:**
 ```bash

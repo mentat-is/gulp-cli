@@ -4,6 +4,7 @@ Context management commands for Gulp CLI.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import typer
@@ -14,11 +15,26 @@ from gulp_cli.output import print_result, print_records
 app = typer.Typer(help="Context management")
 
 
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
+
+
 def _context_row(context: dict[str, Any]) -> dict[str, Any]:
     """Format context for display."""
     row = dict(context)
-    # Remove nested sources for summary view
-    row.pop("sources", None)
+    sources = row.pop("sources", None)
+
+    flattened_sources: list[dict[str, Any]] = []
+    if isinstance(sources, list):
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            source_row = {"id": source.get("id")}
+            if source.get("name") is not None:
+                source_row["name"] = source.get("name")
+            flattened_sources.append(source_row)
+
+    row["sources"] = _compact_json(flattened_sources)
     return row
 
 

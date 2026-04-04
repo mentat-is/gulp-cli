@@ -8,6 +8,8 @@
     - [CSV Data Ingestion with Custom Parameters](#csv-data-ingestion-with-custom-parameters)
     - [JSON Logs Ingestion](#json-logs-ingestion)
     - [Add More Evidence to Existing Source](#add-more-evidence-to-existing-source)
+    - [ZIP Archive Ingestion](#zip-archive-ingestion)
+    - [Raw Payload Ingestion](#raw-payload-ingestion)
   - [Request Stats Monitoring Workflows](#request-stats-monitoring-workflows)
     - [Monitor Ongoing Requests (Live)](#monitor-ongoing-requests-live)
     - [Get One Request Stat By Id](#get-one-request-stat-by-id)
@@ -172,6 +174,9 @@ gulp-cli ingest file incident-001 csv /data/access_log.csv \
 ```bash
 # Ingest JSON logs
 gulp-cli ingest file incident-001 json '/logs/**/*.json' --wait
+
+# Auto-create operation if missing
+gulp-cli ingest file incident-001 json '/logs/**/*.json' --create-operation
 ```
 
 ### Add More Evidence to Existing Source
@@ -181,7 +186,30 @@ gulp-cli ingest file incident-001 json '/logs/**/*.json' --wait
 gulp-cli ingest file incident-001 win_evtx /initial/evidence.evtx
 
 # Later, add more files to same source
-gulp-cli ingest file-to-source incident-001 data-2026-001 win_evtx /additional/evidence.evtx --wait
+gulp-cli ingest file-to-source data-2026-001 /additional/evidence.evtx --wait
+
+# You can also ingest multiple files via glob
+gulp-cli ingest file-to-source data-2026-001 '/additional/*.evtx' --wait
+```
+
+### ZIP Archive Ingestion
+
+```bash
+# Ingest prepared ZIP evidence archive
+gulp-cli ingest zip incident-001 /evidence/evidence.zip --wait
+
+# Auto-create operation when missing
+gulp-cli ingest zip incident-001 /evidence/evidence.zip --create-operation
+```
+
+### Raw Payload Ingestion
+
+```bash
+# Ingest raw JSON payload directly
+gulp-cli ingest raw incident-raw --data '[{"id":"doc-1","@timestamp":"2026-01-01T00:00:00Z"}]' --wait
+
+# Ingest raw payload from file (chunked flow)
+gulp-cli ingest raw incident-raw --data-file /tmp/raw_chunk.json --last --wait
 ```
 
 ---

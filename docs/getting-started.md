@@ -153,6 +153,9 @@ Ingest a single file:
 
 ```bash
 gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evtx
+
+# Optional: create operation automatically if missing
+gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evtx --create-operation
 ```
 
 Delete and recreate operation before ingest (optional, destructive):
@@ -191,6 +194,22 @@ gulp-cli ingest file my_investigation win_evtx '/gulp/samples/win_evtx/*.evtx' -
 ```
 
 This shows a real-time progress bar while documents are being ingested.
+
+### Add Data to Existing Source
+
+```bash
+gulp-cli ingest file-to-source existing-source-id /gulp/samples/win_evtx/Security.evtx --wait
+```
+
+### Ingest ZIP / Raw Data
+
+```bash
+# ZIP archive ingestion
+gulp-cli ingest zip my_investigation /path/to/evidence.zip --wait
+
+# Raw payload ingestion from a file
+gulp-cli ingest raw my_investigation --data-file /tmp/raw_chunk.json --last --wait
+```
 
 ### Rebase Timestamps
 
