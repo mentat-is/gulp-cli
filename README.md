@@ -1,7 +1,5 @@
 # 🚀 gulp-cli
 
-> THIS IS STILL WIP! for the cli to work, set `"ws_ignore_missing": true` in your `gulp_cfg.json` to prevent the backend from halting operations when the CLI disconnects its websocket after sending an async request. This is a temporary workaround until (if)we implement a proper solution for maintaining the websocket lifecycle in the CLI.
-
 **A modern, powerful command-line interface for gULP** — manage forensic document ingestion, querying, enrichment, and collaboration entirely from your terminal.
 
 ## ✨ What can you do?
@@ -28,10 +26,10 @@ All with **beautiful terminal output**, **automatic tab completion**, and **asyn
 ### Installation
 
 ```bash
-# Temporary setup: gulp-sdk is currently installed from GitHub via gulp-cli dependencies.
-# In the future, both gulp-sdk and gulp-cli will be installable directly from PyPI.
-# for now, clone this repository and install in development mode.
-# you can use your existing gulp .venv or create a new one ...
+# from pip
+pip install gulp-cli
+
+# or, for the latest development version:
 python3 -m venv ./.venv
 source ./.venv/bin/activate
 git clone https://github.com/mentat-is/gulp-cli
@@ -43,6 +41,8 @@ gulp-cli --help
 
 ### Basic Usage
 
+> for the cli to work, set `"ws_ignore_missing": true` (should be default in the v1.6.51 backend, though ...) in your `gulp_cfg.json` to prevent the backend from halting operations when the CLI disconnects its websocket after sending an async request!
+ 
 ```bash
 # Login to your gULP instance
 gulp-cli auth login --url http://localhost:8080 --username admin --password admin
