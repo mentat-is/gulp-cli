@@ -132,6 +132,10 @@ gulp-cli ingest file incident-001 win_evtx /path/to/System.evtx
 
 # Optional: delete and recreate operation before ingestion
 gulp-cli ingest file incident-001 win_evtx /path/to/System.evtx --reset-operation
+
+# pass GulpPluginParameters to specify a mapping file for a pcap ingestion
+gulp-cli ingest file test_operation pcap ./ultimate_wireshark_protocols_pcap_220213.p
+cap --plugin-params '{ "mapping_parameters": { "mapping_file": "pcap.json" } }' --reset-operation --wait
 ```
 
 ### Bulk File Ingestion with Wildcard
