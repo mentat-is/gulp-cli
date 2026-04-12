@@ -305,7 +305,7 @@ gulp mapping delete my_mapping.json
 
 ## Enhance Document Map Management
 
-Enhance document maps let you bind a plugin-specific `gulp.event_code` to a visual style (`glyph_id` and/or `color`).
+Enhance document maps let you map a set of document field criteria within a plugin to a visual style (`glyph_id` and/or `color`). Criteria can be simple values for exact matches or operator dicts for numeric ranges.
 
 ### List Enhance Maps
 
@@ -315,21 +315,33 @@ gulp-cli enhance-map list
 # Filter by plugin
 gulp-cli enhance-map list --flt '{"plugin":"win_evtx"}'
 
-# Filter by event code (as string)
-gulp-cli enhance-map list --flt '{"gulp_event_code":"4624"}'
+# Filter by match_criteria pattern
+gulp-cli enhance-map list --flt '{"match_criteria":{"gulp.event_code":{"eq":4624}}}'
 ```
 
 ### Create Enhance Map
 
+Criteria values can be simple values for exact match or operator dicts:
+- `"eq"`: exact equality
+- `"gte"`: greater than or equal
+- `"lte"`: less than or equal
+- Operators can be combined for ranges
+
 ```bash
-# Map Windows logon event to a glyph
-gulp-cli enhance-map create 4624 win_evtx --glyph-id glyph_logon
+# Map event code to a glyph (exact match)
+gulp-cli enhance-map create win_evtx '{"gulp.event_code":{"eq":4624}}' --glyph-id glyph_logon
 
 # Map event to color only
-gulp-cli enhance-map create 4625 win_evtx --color "#ff3300"
+gulp-cli enhance-map create win_evtx '{"gulp.event_code":{"eq":4625}}' --color "#ff3300"
 
-# Map event to both glyph and color
-gulp-cli enhance-map create 4688 win_evtx --glyph-id glyph_process --color "#ffaa00"
+# Map using numeric range
+gulp-cli enhance-map create win_evtx '{"severity_level":{"gte":7,"lte":10}}' --color "#ffaa00"
+
+# Map with multiple criteria (all must match)
+gulp-cli enhance-map create win_evtx '{"gulp.event_code":{"eq":4688},"status":"active"}' --glyph-id glyph_process
+
+# Mix operators and simple values
+gulp-cli enhance-map create win_evtx '{"event_id":{"eq":4624},"provider":"Security-Auditing"}' --color "#00ff00"
 ```
 
 ### Update/Get/Delete Enhance Map

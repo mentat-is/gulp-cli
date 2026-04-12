@@ -13,21 +13,23 @@ app = typer.Typer(help="Enhance document map management")
 
 @app.command("create")
 def enhance_map_create(
-    gulp_event_code: int = typer.Argument(..., help="gulp.event_code to map"),
     plugin: str = typer.Argument(..., help="Plugin name"),
+    match_criteria: str = typer.Argument(..., help="JSON dict mapping document fields to criteria values (e.g., '{\"gulp.event_code\": {\"eq\": 4624}}'). Values can be simple values for exact match or operator dicts with 'eq', 'gte', 'lte' keys."),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID to map"),
     color: str | None = typer.Option(None, "--color", help="Color to map (e.g. #ff0000)"),
 ) -> None:
-    """Create an enhance map entry for plugin+event code."""
+    """Create an enhance map entry for plugin + match criteria."""
 
     async def _run() -> None:
         if glyph_id is None and color is None:
             raise typer.BadParameter("At least one of --glyph-id or --color must be provided")
 
+        criteria_dict = parse_json_option(match_criteria, field_name="match_criteria")
+        
         async with get_client() as client:
             data = await client.plugins.enhance_map_create(
-                gulp_event_code=gulp_event_code,
                 plugin=plugin,
+                match_criteria=criteria_dict,
                 glyph_id=glyph_id,
                 color=color,
             )

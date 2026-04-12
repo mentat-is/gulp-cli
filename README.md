@@ -11,7 +11,7 @@
 - 👥 **User Management** — create users, manage permissions (admin only)
 - 📋 **Operations** — create/list/manage operations and contexts
 - 🔌 **Plugins** — list/upload/download plugins and mapping files
-- 🗺️ **Enhance Maps** — map `gulp.event_code` to glyph/color per plugin
+- 🗺️ **Enhance Maps** — map document fields (e.g., `gulp.event_code`) to glyph/color per plugin
 - 🖼️ **Glyphs** — create/list/update/delete custom glyphs
 - 🧩 **Dynamic Extensions** — load custom CLI commands from internal or user extension folders
 - 📊 **Stats** — monitor ingestion and query requests

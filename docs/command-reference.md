@@ -2116,12 +2116,23 @@ gulp-cli mapping delete FILENAME [OPTIONS]
 
 ## Enhance Map Management (`enhance-map`)
 
-Map `gulp.event_code` values per plugin to a glyph and/or color used by the UI.
+Map document field criteria per plugin to a glyph and/or color used by the UI. Criteria can be simple values for exact matches or operator dicts for numeric comparisons.
 
 #### `enhance-map create`
 
 ```bash
-gulp-cli enhance-map create GULP_EVENT_CODE PLUGIN [--glyph-id GLYPH_ID] [--color COLOR]
+gulp-cli enhance-map create PLUGIN MATCH_CRITERIA [--glyph-id GLYPH_ID] [--color COLOR]
+```
+
+Where `MATCH_CRITERIA` is a JSON dict mapping document field names to criteria values:
+- Simple values for exact match: `'{"field":"value"}'`
+- Operator dicts for numeric comparisons: `'{"field":{"eq":value}}'`, `'{"field":{"gte":min,"lte":max}}'`
+- Multiple criteria (all must match): `'{"field1":"value","field2":{"gte":10}}'`
+
+Examples:
+```bash
+gulp-cli enhance-map create win_evtx '{"gulp.event_code":{"eq":4624}}' --glyph-id logon_glyph
+gulp-cli enhance-map create win_evtx '{"severity":{"gte":7,"lte":10}}' --color "#ff0000"
 ```
 
 #### `enhance-map update`
