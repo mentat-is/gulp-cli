@@ -29,7 +29,7 @@ def _merge_q_options_overrides(
     *,
     preview: bool,
     limit: int | None,
-    offset: int | None,
+    offset: int | None = None,
 ) -> dict[str, Any] | None:
     merged = dict(q_options or {})
     if preview:
@@ -42,6 +42,36 @@ def _merge_q_options_overrides(
         return None
     return merged
 
+@app.command("raw-paginate")
+def query_raw_paginate(
+    operation_id: str,
+    q: str = typer.Option(..., "--q", help="JSON object with an OpenSearch DSL query"),
+    limit: int = typer.Option(10, "--limit", min=1, help="Number of results to return"),
+    offset: int = typer.Option(0, "--offset", min=0, help="Number of results to skip (offset to start from)"),
+    q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters (overridden by --limit/--offset)"),
+) -> None:
+    """Run a paginated query with direct response (no background task)."""
+
+    async def _run() -> None:
+        q_parsed = parse_json_list_option(q, field_name="q")
+        if not q_parsed:
+            raise typer.BadParameter("--q is required")
+        options = parse_json_option(q_options, field_name="q-options")
+        options = _merge_q_options_overrides(
+            options,
+            preview=False,
+            limit=limit,
+            offset=offset,
+        )
+        async with get_client() as client:
+            result = await client.queries.query_raw_paginate(
+                operation_id=operation_id,
+                q=q_parsed[0],
+                q_options=options,
+            )
+            print_result(result)
+
+    asyncio.run(_run())
 
 @app.command("raw")
 def query_raw(
@@ -50,7 +80,6 @@ def query_raw(
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Enable preview_mode in q_options (synchronous limited result set)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
-    offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
 ) -> None:
     async def _run() -> None:
@@ -62,7 +91,6 @@ def query_raw(
             options,
             preview=preview,
             limit=limit,
-            offset=offset,
         )
         async with get_client() as client:
             result = await client.queries.query_raw(
@@ -83,7 +111,6 @@ def query_gulp(
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Enable preview_mode in q_options (synchronous limited result set)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
-    offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
 ) -> None:
     async def _run() -> None:
@@ -93,7 +120,6 @@ def query_gulp(
             options,
             preview=preview,
             limit=limit,
-            offset=offset,
         )
         async with get_client() as client:
             result = await client.queries.query_gulp(
@@ -116,7 +142,6 @@ def query_external(
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Enable preview_mode in q_options (no ingest in external plugins that support it)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
-    offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
     wait: bool = typer.Option(False, "--wait"),
 ) -> None:
     """Query an external data source through a query plugin."""
@@ -131,7 +156,6 @@ def query_external(
             options,
             preview=preview,
             limit=limit,
-            offset=offset,
         )
 
         async with get_client() as client:
@@ -229,7 +253,6 @@ def query_gulp_export(
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Set q_options.preview_mode (ignored server-side by export API)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
-    offset: int | None = typer.Option(None, "--offset", min=0, help="Set q_options.offset"),
 ) -> None:
     """Export query_gulp results into a JSON file (streamed download)."""
 
@@ -240,7 +263,6 @@ def query_gulp_export(
             options,
             preview=preview,
             limit=limit,
-            offset=offset,
         )
         output_path = str(Path(output).expanduser())
 

@@ -36,11 +36,13 @@ gulp-cli auth login [OPTIONS]
 ```
 
 **Options:**
+
 - `--url TEXT` — Server URL (default: from config or `http://localhost:8080`)
 - `--username TEXT` — Username (required)
 - `--password TEXT` — Password (required, or prompt if not provided)
 
 **Examples:**
+
 ```bash
 gulp-cli auth login --url http://localhost:8080 --username admin --password admin
 gulp-cli auth login --url http://localhost:8080 --username guest --password guest
@@ -60,6 +62,7 @@ gulp-cli auth logout [OPTIONS]
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli auth logout
 gulp-cli --as-user guest auth logout
@@ -76,12 +79,14 @@ gulp-cli auth whoami [OPTIONS]
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli auth whoami
 gulp-cli --as-user guest auth whoami
 ```
 
 **Output:**
+
 ```
 ├─ User: admin
 ├─ Permissions: admin
@@ -101,10 +106,12 @@ gulp-cli user list [OPTIONS]
 ```
 
 **Options:**
+
 - `--limit INTEGER` — Max results (default: 50)
 - `--offset INTEGER` — Offset (default: 0)
 
 **Examples:**
+
 ```bash
 gulp-cli user list
 gulp-cli user list --limit 100
@@ -121,9 +128,11 @@ gulp-cli user get USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `USERNAME` — Username to retrieve
 
 **Examples:**
+
 ```bash
 gulp-cli user get alice
 ```
@@ -139,14 +148,17 @@ gulp-cli user create USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `USERNAME` — New username
 
 **Options:**
+
 - `--password TEXT` — Password (prompted if not provided)
 - `--admin` — Grant admin privileges
 - `--permissions TEXT` — Comma-separated permissions (e.g., `read,write,execute`)
 
 **Examples:**
+
 ```bash
 gulp-cli user create alice --password secret123
 gulp-cli user create bob --password secret456 --admin
@@ -164,14 +176,17 @@ gulp-cli user update USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `USERNAME` — Username to update
 
 **Options:**
+
 - `--password TEXT` — New password
 - `--admin` — Set admin status (use `--no-admin` to revoke)
 - `--permissions TEXT` — Update permissions
 
 **Examples:**
+
 ```bash
 gulp-cli user update alice --password newpass123
 gulp-cli user update bob --admin
@@ -189,12 +204,15 @@ gulp-cli user delete USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `USERNAME` — Username to delete
 
 **Options:**
+
 - `--confirm` — Skip confirmation prompt
 
 **Examples:**
+
 ```bash
 gulp-cli user delete alice
 gulp-cli user delete alice --confirm
@@ -214,9 +232,11 @@ gulp-cli user session-list [OPTIONS]
 ```
 
 **Options:**
+
 - `--user-id TEXT` — Optional user filter; admin required for other users
 
 **Examples:**
+
 ```bash
 gulp-cli user session-list
 gulp-cli user session-list --user-id alice
@@ -237,9 +257,11 @@ gulp-cli user session-delete SESSION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `SESSION_ID` — Session ID to delete
 
 **Examples:**
+
 ```bash
 gulp-cli user session-delete abc123def456
 gulp-cli --as-user admin user session-delete abc123def456
@@ -258,10 +280,12 @@ gulp-cli operation list [OPTIONS]
 ```
 
 **Options:**
+
 - `--limit INTEGER` — Max results (default: 50)
 - `--offset INTEGER` — Offset (default: 0)
 
 **Examples:**
+
 ```bash
 gulp-cli operation list
 gulp-cli operation list --limit 100
@@ -278,9 +302,11 @@ gulp-cli operation get OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID
 
 **Examples:**
+
 ```bash
 gulp-cli operation get my_investigation
 ```
@@ -296,13 +322,16 @@ gulp-cli operation create OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID (must be unique)
 
 **Options:**
+
 - `--description TEXT` — Operation description
 - `--display-name TEXT` — Display name (default: same as operation ID)
 
 **Examples:**
+
 ```bash
 gulp-cli operation create incident-2026-001 --description "Malware investigation"
 gulp-cli operation create my_investigation --display-name "My Investigation"
@@ -319,13 +348,16 @@ gulp-cli operation update OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID
 
 **Options:**
+
 - `--description TEXT` — New description
 - `--display-name TEXT` — New display name
 
 **Examples:**
+
 ```bash
 gulp-cli operation update my_investigation --description "Updated description"
 ```
@@ -341,12 +373,15 @@ gulp-cli operation delete OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID
 
 **Options:**
+
 - `--confirm` — Skip confirmation
 
 **Examples:**
+
 ```bash
 gulp-cli operation delete my_investigation --confirm
 ```
@@ -362,10 +397,12 @@ gulp-cli operation grant-user OPERATION_ID USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID
 - `USERNAME` — Username to grant access
 
 **Examples:**
+
 ```bash
 gulp-cli operation grant-user my_investigation alice
 ```
@@ -381,10 +418,12 @@ gulp-cli operation revoke-user OPERATION_ID USERNAME [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID
 - `USERNAME` — Username to revoke access
 
 **Examples:**
+
 ```bash
 gulp-cli operation revoke-user my_investigation alice
 ```
@@ -402,11 +441,13 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 - `PLUGIN` — Plugin name (e.g., `win_evtx`, `syslog`, `csv`)
 - `FILE` — File path or glob pattern (multiple allowed)
 
 **Options:**
+
 - `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
@@ -417,6 +458,7 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
+
 ```bash
 # Single file
 gulp-cli ingest file my_op win_evtx /path/to/System.evtx
@@ -454,16 +496,19 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 ```
 
 **Arguments:**
+
 - `SOURCE_ID` — Source ID
 - `FILE` — File path or glob pattern (multiple allowed)
 
 **Options:**
+
 - `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults)
 - `--flt TEXT` — JSON object for GulpIngestionFilter
 - `--wait` — Wait for completion with progress
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
+
 ```bash
 gulp-cli ingest file-to-source source123 /new/System.evtx --wait
 gulp-cli ingest file-to-source source123 '/new/*.evtx'
@@ -480,10 +525,12 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 - `ZIP_FILE` — Path to ZIP file
 
 **Options:**
+
 - `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
 - `--create-operation` — Create operation automatically when it does not exist
@@ -491,6 +538,7 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
+
 ```bash
 gulp-cli ingest zip my_op /data/evidence.zip --wait
 gulp-cli ingest zip my_op /data/evidence.zip --create-operation
@@ -507,9 +555,11 @@ gulp-cli ingest raw OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--data TEXT` — Raw payload text (JSON recommended)
 - `--data-file TEXT` — Path to file containing raw payload
 - `--plugin TEXT` — Plugin used to process the raw payload (default: `raw`)
@@ -522,13 +572,13 @@ gulp-cli ingest raw OPERATION_ID [OPTIONS]
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
 
 **Examples:**
+
 ```bash
 gulp-cli ingest raw my_op --data '[{"id":"doc-1","@timestamp":"2026-01-01T00:00:00Z"}]' --wait
 gulp-cli ingest raw my_op --data-file /tmp/raw_chunk.json --last --wait
 ```
 
 ---
-
 
 ## Query (`query`)
 
@@ -541,17 +591,19 @@ gulp-cli query raw OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--q TEXT` — OpenSearch query JSON (required)
 - `--q-options TEXT` — Query options JSON
 - `--preview` — Enable `q_options.preview_mode=true` (synchronous preview result)
 - `--limit INTEGER` — Set `q_options.limit`
-- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for query completion
 
 **Examples:**
+
 ```bash
 # Match all documents
 gulp-cli query raw my_op --q '{"query":{"match_all":{}}}'
@@ -563,13 +615,41 @@ gulp-cli query raw my_op --q '{"query":{"term":{"EventID":4688}}}'
 gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --preview
 
 # Pagination override
-gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --limit 100 --offset 200
+gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --limit 100
 
 # Wait for completion
 gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --wait
 
 # Preview mode can also be provided through q-options
 gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --q-options '{"preview_mode":true}'
+```
+
+---
+
+#### `raw-paginate`
+
+Execute a raw OpenSearch query with simple pagination.
+
+```bash
+gulp-cli query raw-paginate OPERATION_ID [OPTIONS]
+```
+
+**Arguments:**
+
+- `OPERATION_ID` — Target operation
+- `--q TEXT` — OpenSearch query JSON (required)
+- `--limit INTEGER` — Number of results to return (default: 10)
+- `--offset INTEGER` — Result offset for pagination (default: 0)
+- `--q-options TEXT` — Query options JSON (i.e. for sorting, --limit/--offset override q_options values)
+
+**Examples:**
+
+```bash
+# Get first 10 results
+gulp-cli query raw-paginate my_op --q '{"query":{"match_all":{}}}'
+
+# Get next 10 results (pagination)
+gulp-cli query raw-paginate my_op --q '{"query":{"match_all":{}}}' --offset 10
 ```
 
 ---
@@ -583,17 +663,19 @@ gulp-cli query gulp OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--flt TEXT` — Filter JSON
 - `--q-options TEXT` — Query options JSON
 - `--preview` — Enable `q_options.preview_mode=true` (synchronous preview result)
 - `--limit INTEGER` — Set `q_options.limit`
-- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 # Get documents with default options
 gulp-cli query gulp my_op
@@ -608,7 +690,7 @@ gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}'
 gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}' --preview
 
 # Pagination override
-gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}' --limit 200 --offset 400
+gulp-cli query gulp my_op --flt '{"tags":["suspicious"]}' --limit 200
 ```
 
 ---
@@ -622,10 +704,12 @@ gulp-cli query document-get-by-id OPERATION_ID DOC_ID
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 - `DOC_ID` — Document `_id`
 
 **Examples:**
+
 ```bash
 gulp-cli query document-get-by-id incident-001 AVY84pUBM0e5DCHhCzDq
 ```
@@ -641,9 +725,11 @@ gulp-cli query aggregation OPERATION_ID --q JSON
 ```
 
 **Options:**
+
 - `--q TEXT` — Aggregation query JSON object (required)
 
 **Examples:**
+
 ```bash
 gulp-cli query aggregation incident-001 \
   --q '{"size":0,"aggs":{"by_event_code":{"terms":{"field":"event.code"}}}}'
@@ -660,6 +746,7 @@ gulp-cli query history-get
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli query history-get
 ```
@@ -675,10 +762,12 @@ gulp-cli query max-min-per-field OPERATION_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--flt TEXT` — `GulpQueryFilter` JSON object
 - `--group-by TEXT` — Optional group-by field (for example: `event.code`)
 
 **Examples:**
+
 ```bash
 gulp-cli query max-min-per-field incident-001
 gulp-cli query max-min-per-field incident-001 --group-by event.code
@@ -696,14 +785,15 @@ gulp-cli query gulp-export OPERATION_ID --output PATH [OPTIONS]
 ```
 
 **Options:**
+
 - `--output TEXT` — Output file path (required)
 - `--flt TEXT` — `GulpQueryFilter` JSON object
 - `--q-options TEXT` — `GulpQueryParameters` JSON object
 - `--preview` — Set `q_options.preview_mode` (ignored server-side by export API)
 - `--limit INTEGER` — Set `q_options.limit`
-- `--offset INTEGER` — Set `q_options.offset`
 
 **Examples:**
+
 ```bash
 gulp-cli query gulp-export incident-001 \
   --flt '{"source_ids":["security"]}' \
@@ -721,9 +811,11 @@ gulp-cli query sigma OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--rule-file TEXT` — Path to Sigma YAML rule file (required)
 - `--src-ids TEXT` — Comma-separated source IDs to query
 - `--levels TEXT` — Comma-separated severity levels (critical, high, medium, low)
@@ -731,6 +823,7 @@ gulp-cli query sigma OPERATION_ID [OPTIONS]
 - `--timeout INTEGER` — Timeout in seconds
 
 **Examples:**
+
 ```bash
 # Run Sigma rule
 gulp-cli query sigma my_op --rule-file /rules/process_creation.yml
@@ -756,9 +849,11 @@ gulp-cli query sigma-zip OPERATION_ID --zip-file PATH [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--zip-file TEXT` — Path to ZIP archive containing Sigma YAML rules (required)
 - `--src-ids TEXT` — Comma-separated source IDs
 - `--levels TEXT` — Comma-separated severity levels (`critical,high,medium,low,informational`)
@@ -771,6 +866,7 @@ gulp-cli query sigma-zip OPERATION_ID --zip-file PATH [OPTIONS]
 - `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
 
 **Examples:**
+
 ```bash
 # Query using zipped Sigma rules
 gulp-cli query sigma-zip incident-001 --zip-file /rules/windows_small.zip
@@ -799,19 +895,21 @@ gulp-cli query external OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--plugin TEXT` — Plugin name (required)
 - `--q TEXT` — Query payload (JSON or plain text)
 - `--plugin-params TEXT` — `GulpPluginParameters` JSON object (required)
 - `--q-options TEXT` — `GulpQueryParameters` JSON object
 - `--preview` — Enable `q_options.preview_mode=true`
 - `--limit INTEGER` — Set `q_options.limit`
-- `--offset INTEGER` — Set `q_options.offset`
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 gulp-cli query external my_op \
   --plugin query_elasticsearch \
@@ -823,7 +921,7 @@ gulp-cli query external my_op \
   --plugin query_elasticsearch \
   --plugin-params '{"custom_parameters":{"index":"my_index"}}' \
   --q '{"query":{"match":{"message":"error"}}}' \
-  --preview --limit 50 --offset 0
+  --preview --limit 50
 ```
 
 ---
@@ -855,6 +953,7 @@ gulp-cli stats get REQ_ID [OPTIONS]
 **Options:**
 
 **Examples:**
+
 ```bash
 gulp-cli stats get 903546ff-c01e-4875-a585-d7fa34a0d237
 gulp-cli --verbose --as-user admin stats get 903546ff-c01e-4875-a585-d7fa34a0d237
@@ -871,11 +970,13 @@ gulp-cli stats list OPERATION_ID [OPTIONS]
 ```
 
 **Default behavior:**
+
 - Shows only ongoing stats (`--ongoing-only` enabled)
 - Renders a live table (`--live` enabled)
 - Default columns: `user_id`, `ws_id`, `req_id`, `status`, `req_type`, `time_updated`, `data`, `errors`
 
 **Options:**
+
 - `--ongoing-only / --all` — Show only ongoing (default) or all stats
 - `--user-id TEXT` — Filter by user id
 - `--req-type TEXT` — Filter by request type (for example: `ingest`, `query`, `enrich`)
@@ -888,6 +989,7 @@ gulp-cli stats list OPERATION_ID [OPTIONS]
 - `--limit INTEGER` — Max rows to render (default: `100`)
 
 **Examples:**
+
 ```bash
 # Default: ongoing-only + live refresh
 gulp-cli stats list incident-001
@@ -928,13 +1030,16 @@ gulp-cli stats delete-bulk OPERATION_ID [OPTIONS]
 ```
 
 **Important:**
+
 - You must provide `--flt` or explicitly pass `--all`.
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON object
 - `--all` — Delete all request stats in the operation
 
 **Examples:**
+
 ```bash
 # Delete stats of a specific type
 gulp-cli stats delete-bulk incident-001 \
@@ -955,9 +1060,11 @@ gulp-cli stats cancel REQ_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--expire-now` — Immediately expire and delete the request stats entry after cancellation
 
 **Examples:**
+
 ```bash
 # Cancel request and keep default grace period before cleanup
 gulp-cli stats cancel 903546ff-c01e-4875-a585-d7fa34a0d237
@@ -979,6 +1086,7 @@ gulp-cli db rebase-by-query OPERATION_ID --offset-msec OFFSET [OPTIONS]
 ```
 
 **Options:**
+
 - `--offset-msec INTEGER` — Milliseconds to add to timestamps (negative to subtract)
 - `--flt TEXT` — `GulpQueryFilter` JSON object to restrict documents
 - `--script TEXT` — Custom Painless script override
@@ -986,6 +1094,7 @@ gulp-cli db rebase-by-query OPERATION_ID --offset-msec OFFSET [OPTIONS]
 - `--timeout INTEGER` — Timeout in seconds when `--wait` is used
 
 **Examples:**
+
 ```bash
 # Shift all documents forward by one hour
 gulp-cli db rebase-by-query incident-001 --offset-msec 3600000 --wait
@@ -1015,14 +1124,17 @@ gulp-cli enrich tag OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--flt TEXT` — Filter JSON (required)
 - `--tag TEXT` — Tag to add (multiple allowed, at least one required)
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 # Add single tag
 gulp-cli enrich tag my_op --flt '{"source":"Security"}' --tag "reviewed"
@@ -1046,14 +1158,17 @@ gulp-cli enrich untag OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--flt TEXT` — Filter JSON (required)
 - `--tag TEXT` — Tag to remove (multiple allowed)
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 gulp-cli enrich untag my_op --flt '{"tag":"pending"}' --tag "pending"
 ```
@@ -1069,14 +1184,17 @@ gulp-cli enrich update OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--flt TEXT` — Filter JSON (required)
 - `--fields TEXT` — Fields JSON to update (required)
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 # Set threat level
 gulp-cli enrich update my_op \
@@ -1095,14 +1213,17 @@ gulp-cli enrich remove OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--flt TEXT` — Filter JSON (required)
 - `--fields TEXT` — Field names to remove (comma-separated)
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 gulp-cli enrich remove my_op \
   --flt '{"done":true}' \
@@ -1120,15 +1241,18 @@ gulp-cli enrich documents OPERATION_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 
 **Options:**
+
 - `--plugin TEXT` — Plugin name (required)
 - `--plugin-params TEXT` — Plugin parameters JSON
 - `--flt TEXT` — Filter JSON
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 gulp-cli enrich documents my_op \
   --plugin my_enricher \
@@ -1147,15 +1271,18 @@ gulp-cli enrich single-id OPERATION_ID DOCUMENT_ID [OPTIONS]
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Target operation
 - `DOCUMENT_ID` — Document ID
 
 **Options:**
+
 - `--plugin TEXT` — Plugin name (required)
 - `--plugin-params TEXT` — Plugin parameters JSON
 - `--wait` — Wait for completion
 
 **Examples:**
+
 ```bash
 gulp-cli enrich single-id my_op doc123 --plugin my_enricher
 ```
@@ -1177,9 +1304,11 @@ gulp-cli collab note list OPERATION_ID [OPTIONS]
 **Options:**
 
 **Default columns:**
+
 - `id`, `operation_id`, `user_id`, `server_id`, `context_id`, `source_id`, `time_pin`, `text`
 
 **Examples:**
+
 ```bash
 gulp-cli collab note list incident-001
 gulp-cli --verbose collab note list incident-001
@@ -1196,9 +1325,11 @@ gulp-cli collab note create OPERATION_ID CONTEXT_ID SOURCE_ID NAME TEXT [OPTIONS
 ```
 
 **Important:**
+
 - At least one of `--time-pin` or `--doc` is required.
 
 **Options:**
+
 - `--tags TEXT` — Comma-separated tags
 - `--glyph-id TEXT` — Glyph ID
 - `--color TEXT` — Color string
@@ -1207,6 +1338,7 @@ gulp-cli collab note create OPERATION_ID CONTEXT_ID SOURCE_ID NAME TEXT [OPTIONS
 - `--doc TEXT` — JSON object for associated document
 
 **Examples:**
+
 ```bash
 # Time-pinned note
 gulp-cli collab note create incident-001 sdk_context security "Analyst note" "Suspicious login spike" \
@@ -1229,6 +1361,7 @@ gulp-cli collab note update NOTE_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--name TEXT` — Update note name
 - `--text TEXT` — Update note text
 - `--tags TEXT` — Replace tags with comma-separated values
@@ -1238,6 +1371,7 @@ gulp-cli collab note update NOTE_ID [OPTIONS]
 - `--doc TEXT` — Replace associated document with JSON object
 
 **Examples:**
+
 ```bash
 gulp-cli collab note update note-123 --text "Updated note text" --tags reviewed,done
 gulp-cli collab note update note-123 --time-pin 1774627000000000000
@@ -1254,6 +1388,7 @@ gulp-cli collab note delete NOTE_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli collab note delete note-123
 ```
@@ -1269,13 +1404,16 @@ gulp-cli collab note delete-bulk OPERATION_ID [OPTIONS]
 ```
 
 **Important:**
+
 - You must provide `--flt` or explicitly pass `--all`.
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON object
 - `--all` — Delete all notes in the operation
 
 **Examples:**
+
 ```bash
 # Delete notes by source and tag
 gulp-cli collab note delete-bulk incident-001 \
@@ -1295,11 +1433,12 @@ List links in operation.
 gulp-cli collab link list OPERATION_ID [OPTIONS]
 ```
 
-
 **Default columns:**
+
 - `id`, `operation_id`, `user_id`, `server_id`, `doc_id_from`, `doc_ids`
 
 **Examples:**
+
 ```bash
 gulp-cli collab link list incident-001
 gulp-cli --verbose collab link list incident-001
@@ -1316,6 +1455,7 @@ gulp-cli collab link create OPERATION_ID DOC_ID_FROM --doc-ids DOC1,DOC2 [OPTION
 ```
 
 **Options:**
+
 - `--name TEXT` — Link name
 - `--description TEXT` — Link description
 - `--tags TEXT` — Comma-separated tags
@@ -1324,6 +1464,7 @@ gulp-cli collab link create OPERATION_ID DOC_ID_FROM --doc-ids DOC1,DOC2 [OPTION
 - `--private` — Create the link as private
 
 **Examples:**
+
 ```bash
 gulp-cli collab link create incident-001 doc-a --doc-ids doc-b,doc-c \
   --name "lateral movement" \
@@ -1341,6 +1482,7 @@ gulp-cli collab link update LINK_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--name TEXT` — Update link name
 - `--description TEXT` — Update description
 - `--tags TEXT` — Replace tags with comma-separated values
@@ -1349,6 +1491,7 @@ gulp-cli collab link update LINK_ID [OPTIONS]
 - `--doc-ids TEXT` — Replace target document IDs with comma-separated values
 
 **Examples:**
+
 ```bash
 gulp-cli collab link update link-123 --description "Updated correlation rationale"
 gulp-cli collab link update link-123 --doc-ids doc-b,doc-d
@@ -1365,6 +1508,7 @@ gulp-cli collab link delete LINK_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli collab link delete link-123
 ```
@@ -1380,13 +1524,16 @@ gulp-cli collab link delete-bulk OPERATION_ID [OPTIONS]
 ```
 
 **Important:**
+
 - You must provide `--flt` or explicitly pass `--all`.
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON object
 - `--all` — Delete all links in the operation
 
 **Examples:**
+
 ```bash
 # Delete links that involve a specific document id
 gulp-cli collab link delete-bulk incident-001 \
@@ -1406,11 +1553,12 @@ List highlights in operation.
 gulp-cli collab highlight list OPERATION_ID [OPTIONS]
 ```
 
-
 **Default columns:**
+
 - `id`, `operation_id`, `user_id`, `server_id`, `time_range`
 
 **Examples:**
+
 ```bash
 gulp-cli collab highlight list incident-001
 gulp-cli --verbose collab highlight list incident-001
@@ -1427,6 +1575,7 @@ gulp-cli collab highlight create OPERATION_ID --time-range START_NS,END_NS [OPTI
 ```
 
 **Options:**
+
 - `--name TEXT` — Highlight name
 - `--description TEXT` — Description
 - `--tags TEXT` — Comma-separated tags
@@ -1435,6 +1584,7 @@ gulp-cli collab highlight create OPERATION_ID --time-range START_NS,END_NS [OPTI
 - `--private` — Create the highlight as private
 
 **Examples:**
+
 ```bash
 gulp-cli collab highlight create incident-001 \
   --time-range 1774626000000000000,1774626060000000000 \
@@ -1453,6 +1603,7 @@ gulp-cli collab highlight update HIGHLIGHT_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--name TEXT` — Update highlight name
 - `--description TEXT` — Update description
 - `--tags TEXT` — Replace tags with comma-separated values
@@ -1461,6 +1612,7 @@ gulp-cli collab highlight update HIGHLIGHT_ID [OPTIONS]
 - `--time-range TEXT` — Replace time range using `START_NS,END_NS`
 
 **Examples:**
+
 ```bash
 gulp-cli collab highlight update hl-123 --time-range 1774626000000000000,1774626120000000000
 gulp-cli collab highlight update hl-123 --description "Expanded reviewed window"
@@ -1477,6 +1629,7 @@ gulp-cli collab highlight delete HIGHLIGHT_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli collab highlight delete hl-123
 ```
@@ -1492,13 +1645,16 @@ gulp-cli collab highlight delete-bulk OPERATION_ID [OPTIONS]
 ```
 
 **Important:**
+
 - You must provide `--flt` or explicitly pass `--all`.
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON object
 - `--all` — Delete all highlights in the operation
 
 **Examples:**
+
 ```bash
 # Delete highlights in a creation-time window
 gulp-cli collab highlight delete-bulk incident-001 \
@@ -1519,6 +1675,7 @@ gulp-cli collab story [COMMAND]
 ```
 
 **Commands:**
+
 - `create` — Create a story object
 - `update` — Update an existing story
 - `delete` — Delete a story by id
@@ -1534,6 +1691,7 @@ gulp-cli collab story create OPERATION_ID --name TEXT --doc-ids DOC1,DOC2 [OPTIO
 ```
 
 **Options:**
+
 - `--highlight-ids TEXT` — Comma-separated highlight IDs
 - `--include-whole-documents` — Include all document fields in each story entry
 - `--description TEXT` — Story description
@@ -1545,6 +1703,7 @@ gulp-cli collab story create OPERATION_ID --name TEXT --doc-ids DOC1,DOC2 [OPTIO
 - `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
 
 **Examples:**
+
 ```bash
 gulp-cli collab story create incident-001 \
   --name "Executive summary" \
@@ -1561,6 +1720,7 @@ gulp-cli collab story update STORY_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--name TEXT` — Update story title
 - `--doc-ids TEXT` — Replace target document IDs
 - `--highlight-ids TEXT` — Replace highlight IDs
@@ -1581,6 +1741,7 @@ gulp-cli collab story delete STORY_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--wait` — Wait for completion if endpoint returns pending
 - `--timeout INTEGER` — Wait timeout in seconds (`0` means no timeout)
 
@@ -1601,9 +1762,11 @@ gulp-cli collab story list OPERATION_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON object
 
 **Examples:**
+
 ```bash
 gulp-cli collab story list incident-001
 gulp-cli collab story list incident-001 --flt '{"tags":["executive"]}'
@@ -1620,6 +1783,7 @@ gulp-cli db list-indexes [OPTIONS]
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli db list-indexes
 gulp-cli --verbose db list-indexes
@@ -1636,9 +1800,11 @@ gulp-cli db refresh-index INDEX
 ```
 
 **Arguments:**
+
 - `INDEX` — Index / datastream name (usually the operation ID)
 
 **Examples:**
+
 ```bash
 gulp-cli db refresh-index incident-001
 ```
@@ -1656,13 +1822,16 @@ gulp-cli db delete-index INDEX [OPTIONS]
 ```
 
 **Arguments:**
+
 - `INDEX` — Index / datastream name
 
 **Options:**
+
 - `--keep-operation` — Do NOT delete the corresponding collab operation
 - `--yes / -y` — Skip the confirmation prompt
 
 **Examples:**
+
 ```bash
 # Interactive confirmation
 gulp-cli db delete-index incident-001
@@ -1689,9 +1858,11 @@ gulp-cli user-group list [OPTIONS]
 ```
 
 **Options:**
+
 - `--flt TEXT` — `GulpCollabFilter` JSON for filtering
 
 **Examples:**
+
 ```bash
 gulp-cli user-group list
 gulp-cli user-group list --verbose
@@ -1709,6 +1880,7 @@ gulp-cli user-group get GROUP_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli user-group get analysts
 ```
@@ -1724,14 +1896,17 @@ gulp-cli user-group create NAME --permission PERMS [OPTIONS]
 ```
 
 **Arguments:**
+
 - `NAME` — Group name (also used as ID)
 
 **Options:**
+
 - `--permission TEXT` — Comma-separated permissions: `read`, `edit`, `ingest`, `admin` (required)
 - `--description / -d TEXT` — Optional description
 - `--glyph-id TEXT` — Optional glyph ID
 
 **Examples:**
+
 ```bash
 gulp-cli user-group create analysts --permission read,edit
 gulp-cli user-group create ingestors --permission read,edit,ingest --description "Can run ingestion"
@@ -1748,11 +1923,13 @@ gulp-cli user-group update GROUP_ID [OPTIONS]
 ```
 
 **Options:**
+
 - `--permission TEXT` — New comma-separated permissions
 - `--description / -d TEXT` — New description
 - `--glyph-id TEXT` — New glyph ID
 
 **Examples:**
+
 ```bash
 gulp-cli user-group update analysts --permission read,edit,ingest
 gulp-cli user-group update analysts --description "Read + edit + ingest access"
@@ -1769,6 +1946,7 @@ gulp-cli user-group delete GROUP_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli user-group delete analysts
 ```
@@ -1784,6 +1962,7 @@ gulp-cli user-group add-user GROUP_ID USER_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli user-group add-user analysts alice
 ```
@@ -1799,6 +1978,7 @@ gulp-cli user-group remove-user GROUP_ID USER_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli user-group remove-user analysts alice
 ```
@@ -1818,13 +1998,16 @@ gulp-cli acl add-user OBJ_ID --obj-type TYPE --user-id USER_ID
 ```
 
 **Arguments:**
+
 - `OBJ_ID` — ID of the object
 
 **Options:**
+
 - `--obj-type TEXT` — Object collab type (e.g. `note`, `operation`, `link`, `highlight`) (required)
 - `--user-id TEXT` — User ID to grant access (required)
 
 **Examples:**
+
 ```bash
 gulp-cli acl add-user note-123 --obj-type note --user-id alice
 gulp-cli acl add-user incident-001 --obj-type operation --user-id alice
@@ -1841,6 +2024,7 @@ gulp-cli acl remove-user OBJ_ID --obj-type TYPE --user-id USER_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli acl remove-user note-123 --obj-type note --user-id alice
 ```
@@ -1856,10 +2040,12 @@ gulp-cli acl add-group OBJ_ID --obj-type TYPE --group-id GROUP_ID
 ```
 
 **Options:**
+
 - `--obj-type TEXT` — Object collab type (required)
 - `--group-id TEXT` — Group ID to grant access (required)
 
 **Examples:**
+
 ```bash
 gulp-cli acl add-group incident-001 --obj-type operation --group-id analysts
 gulp-cli acl add-group note-123 --obj-type note --group-id analysts
@@ -1876,6 +2062,7 @@ gulp-cli acl remove-group OBJ_ID --obj-type TYPE --group-id GROUP_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli acl remove-group incident-001 --obj-type operation --group-id analysts
 ```
@@ -1891,6 +2078,7 @@ gulp-cli acl make-private OBJ_ID --obj-type TYPE
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli acl make-private note-123 --obj-type note
 gulp-cli acl make-private link-456 --obj-type link
@@ -1907,6 +2095,7 @@ gulp-cli acl make-public OBJ_ID --obj-type TYPE
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli acl make-public note-123 --obj-type note
 ```
@@ -1926,12 +2115,14 @@ gulp-cli storage list-files [OPTIONS]
 ```
 
 **Options:**
+
 - `--operation-id TEXT` — Filter by operation ID
 - `--context-id TEXT` — Filter by context ID
 - `--continuation-token TEXT` — Pagination token from previous response
 - `--max-results INTEGER` — Results per page (default: `100`, max: `1000`)
 
 **Examples:**
+
 ```bash
 # List files for one operation
 gulp-cli storage list-files --operation-id incident-001
@@ -1954,13 +2145,16 @@ gulp-cli storage get-file OPERATION_ID STORAGE_ID --output PATH
 ```
 
 **Arguments:**
+
 - `OPERATION_ID` — Operation ID used for permission check
 - `STORAGE_ID` — Storage ID (`gulp.storage_id`)
 
 **Options:**
+
 - `--output TEXT` — Local output file path (required)
 
 **Examples:**
+
 ```bash
 gulp-cli storage get-file incident-001 \
   incident-001/context-a/source-security/System.evtx \
@@ -1978,6 +2172,7 @@ gulp-cli storage delete-by-id OPERATION_ID STORAGE_ID
 ```
 
 **Examples:**
+
 ```bash
 gulp-cli storage delete-by-id incident-001 \
   incident-001/context-a/source-security/System.evtx
@@ -1994,15 +2189,18 @@ gulp-cli storage delete-by-tags [OPTIONS]
 ```
 
 **Important:**
+
 - Provide at least one filter (`--operation-id` and/or `--context-id`) or explicitly pass `--all`.
 
 **Options:**
+
 - `--operation-id TEXT` — Filter by operation ID
 - `--context-id TEXT` — Filter by context ID
 - `--all` — Delete across all operations/contexts
 - `--yes / -y` — Skip confirmation prompt when using `--all`
 
 **Examples:**
+
 ```bash
 # Delete all files in one operation
 gulp-cli storage delete-by-tags --operation-id incident-001
@@ -2027,9 +2225,11 @@ gulp-cli plugin list [OPTIONS]
 ```
 
 **Options:**
+
 - `--plugin-type [extension|external|ingestion|enrichment]` — Filter plugins by functional type
 
 **Examples:**
+
 ```bash
 # List only ingestion plugins
 gulp-cli plugin list --plugin-type ingestion
@@ -2125,11 +2325,13 @@ gulp-cli enhance-map create PLUGIN MATCH_CRITERIA [--glyph-id GLYPH_ID] [--color
 ```
 
 Where `MATCH_CRITERIA` is a JSON dict mapping document field names to criteria values:
+
 - Simple values for exact match: `'{"field":"value"}'`
 - Operator dicts for numeric comparisons: `'{"field":{"eq":value}}'`, `'{"field":{"gte":min,"lte":max}}'`
 - Multiple criteria (all must match): `'{"field1":"value","field2":{"gte":10}}'`
 
 Examples:
+
 ```bash
 gulp-cli enhance-map create win_evtx '{"gulp.event_code":{"eq":4624}}' --glyph-id logon_glyph
 gulp-cli enhance-map create win_evtx '{"severity":{"gte":7,"lte":10}}' --color "#ff0000"
