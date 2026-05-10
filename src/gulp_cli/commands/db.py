@@ -6,10 +6,23 @@ from typing import Any
 import typer
 from gulp_sdk.api.request_utils import wait_for_request_stats
 from gulp_sdk.websocket import WSMessage, WSMessageType
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from gulp_cli.client import get_client
-from gulp_cli.output import console, print_json, print_warning, print_result
+from gulp_cli.output import (
+    console,
+    print_json,
+    print_records,
+    print_warning,
+    print_result,
+)
 from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Database and OpenSearch commands")
@@ -38,7 +51,9 @@ async def _wait_for_stats_create(
     ws.on_message(WSMessageType.STATS_UPDATE, _on_stats)
 
     try:
-        await asyncio.wait_for(asyncio.gather(*[ev.wait() for ev in events.values()]), timeout=timeout)
+        await asyncio.wait_for(
+            asyncio.gather(*[ev.wait() for ev in events.values()]), timeout=timeout
+        )
         return []
     except asyncio.TimeoutError:
         return [rid for rid, ev in events.items() if not ev.is_set()]
@@ -50,11 +65,25 @@ async def _wait_for_stats_create(
 @app.command("rebase-by-query")
 def rebase_by_query(
     operation_id: str,
-    offset_msec: int = typer.Option(..., "--offset-msec", help="Milliseconds to add to timestamps (negative to subtract)"),
+    offset_msec: int = typer.Option(
+        ...,
+        "--offset-msec",
+        help="Milliseconds to add to timestamps (negative to subtract)",
+    ),
     flt: str | None = typer.Option(None, "--flt", help="GulpQueryFilter JSON object"),
-    script: str | None = typer.Option(None, "--script", help="Custom Painless script override"),
-    wait: bool = typer.Option(False, "--wait", help="Wait for rebase completion with websocket-driven progress"),
-    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait when --wait is used"),
+    fields: list[str] | None = typer.Option(
+        None,
+        "--field",
+        help="Optional extra field to rebase other than `@timestamp` and `gulp.timestamp` (no `flat_object` fields, only `date` and integer/long fields are supported; integer/long values are treated as epoch timestamps and the script heuristically infers seconds, milliseconds, microseconds, or nanoseconds before applying the offset)",
+    ),
+    wait: bool = typer.Option(
+        False,
+        "--wait",
+        help="Wait for rebase completion with websocket-driven progress",
+    ),
+    wait_timeout: int = typer.Option(
+        300, "--timeout", help="Seconds to wait when --wait is used"
+    ),
 ) -> None:
     """Rebase document timestamps in an operation using update_by_query."""
 
@@ -69,11 +98,13 @@ def rebase_by_query(
                     ws_id=client.ws_id,
                     offset_msec=offset_msec,
                     flt=flt_obj,
-                    script=script,
+                    fields=fields,
                     wait=False,
                 )
                 req_id = result.get("req_id") if isinstance(result, dict) else None
-                timed_out = await _wait_for_stats_create(client, [str(req_id)] if req_id else [])
+                timed_out = await _wait_for_stats_create(
+                    client, [str(req_id)] if req_id else []
+                )
                 if timed_out:
                     print_warning(
                         f"Request did not receive STATS_CREATE within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s: "
@@ -104,18 +135,30 @@ def rebase_by_query(
                         data = {}
                     total_hits = data.get("total_hits")
                     updated = data.get("updated")
-                    if isinstance(total_hits, int) and total_hits > 0 and isinstance(updated, int):
-                        progress.update(task_id, total=total_hits, completed=min(updated, total_hits))
-                        progress.update(task_id, description=f"rebase ({updated}/{total_hits})")
+                    if (
+                        isinstance(total_hits, int)
+                        and total_hits > 0
+                        and isinstance(updated, int)
+                    ):
+                        progress.update(
+                            task_id,
+                            total=total_hits,
+                            completed=min(updated, total_hits),
+                        )
+                        progress.update(
+                            task_id, description=f"rebase ({updated}/{total_hits})"
+                        )
                     elif isinstance(updated, int):
-                        progress.update(task_id, description=f"rebase ({updated} updated)")
+                        progress.update(
+                            task_id, description=f"rebase ({updated} updated)"
+                        )
 
                 result = await client.db.rebase_by_query(
                     operation_id=operation_id,
                     ws_id=client.ws_id,
                     offset_msec=offset_msec,
                     flt=flt_obj,
-                    script=script,
+                    fields=fields,
                     wait=False,
                 )
                 req_id = result.get("req_id") if isinstance(result, dict) else None
@@ -163,7 +206,9 @@ def refresh_index(
 @app.command("delete-index")
 def delete_index(
     index: str,
-    keep_operation: bool = typer.Option(False, "--keep-operation", help="Do NOT delete the associated collab operation"),
+    keep_operation: bool = typer.Option(
+        False, "--keep-operation", help="Do NOT delete the associated collab operation"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Delete an OpenSearch datastream/index and (by default) its collab operation. WARNING: all data will be lost."""
