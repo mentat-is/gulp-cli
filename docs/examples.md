@@ -122,7 +122,7 @@ gulp-cli auth logout
 
 ---
 
-  ## Ingestion Workflows
+## Ingestion Workflows
 
 ### Single File Ingestion
 
@@ -171,6 +171,10 @@ wait  # Wait for all background jobs
 # Ingest CSV with specific delimiter and encoding
 gulp-cli ingest file incident-001 csv /data/access_log.csv \
   --plugin-params '{"delimiter":";","encoding":"iso-8859-1","has_header":true}'
+
+# pass mapping directly without using a mapping file
+gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters": { "mappings": { "test
+_mapping": { "fields": { "Created0x10": { "ecs": [ "@timestamp" ] } } } } } }' --reset-operation --wait
 ```
 
 ### JSON Logs Ingestion
@@ -505,6 +509,7 @@ gulp-cli query external incident-001 \
   --q '{"query":{"match_all":{}}}' \
   --preview --limit 100 --offset 0
 ```
+
 ```
 
 ### Export Query Results
@@ -967,7 +972,7 @@ gulp-cli acl make-private link-456 --obj-type link
 
 ---
 
-## Index Management Workflows 
+## Index Management Workflows
 
 ### Inspect Indexes
 
@@ -1093,7 +1098,7 @@ gulp-cli enhance-map delete <enhance_map_obj_id>
 ### Query Sigma Rules from ZIP (Extension)
 
 > needs non-free `query_sigma_zip` plugin to be installed on the server, this is provided just as an example.
- 
+
 ```bash
 # Execute all Sigma rules inside a zip archive
 gulp-cli query sigma-zip incident-001 \
