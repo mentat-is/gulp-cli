@@ -175,6 +175,10 @@ gulp-cli ingest file incident-001 csv /data/access_log.csv \
 # pass mapping directly without using a mapping file
 gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters": { "mappings": { "test
 _mapping": { "fields": { "Created0x10": { "ecs": [ "@timestamp" ] } } } } } }' --reset-operation --wait
+
+# pass mapping using a gulp mapping file with mapping_id to specify which mapping to use in the file
+gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters"
+: { "mapping_file": "mftecmd_csv.json", "mapping_id": "record" } }' --wait --reset-operation
 ```
 
 ### JSON Logs Ingestion
