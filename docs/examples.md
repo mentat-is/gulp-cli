@@ -9,6 +9,7 @@
     - [JSON Logs Ingestion](#json-logs-ingestion)
     - [Add More Evidence to Existing Source](#add-more-evidence-to-existing-source)
     - [ZIP Archive Ingestion](#zip-archive-ingestion)
+    - [Create ZIP Archive from Paths and Masks](#create-zip-archive-from-paths-and-masks)
     - [Raw Payload Ingestion](#raw-payload-ingestion)
   - [Request Stats Monitoring Workflows](#request-stats-monitoring-workflows)
     - [Monitor Ongoing Requests (Live)](#monitor-ongoing-requests-live)
@@ -212,6 +213,29 @@ gulp-cli ingest zip incident-001 /evidence/evidence.zip --wait
 
 # Auto-create operation when missing
 gulp-cli ingest zip incident-001 /evidence/evidence.zip --create-operation
+```
+
+### Create ZIP Archive from Paths and Masks
+
+```bash
+# Build ZIP from mixed sources: file, directory, and wildcard mask
+gulp-cli ingest zip-create /evidence/evidence.zip /forensic/host1/*.evtx /forensic/host2 /forensic/notes.txt --overwrite
+
+# Use environment variables and ~ in source expressions and output path
+export CASE_ROOT=~/cases/incident-001
+gulp-cli ingest zip-create '$CASE_ROOT/evidence.zip' '$CASE_ROOT/windows/*.evtx' '$CASE_ROOT/network/*' --overwrite
+
+# Build ZIP from a text file (one path expression per line)
+cat > /tmp/evidence_paths.txt <<'EOF'
+$CASE_ROOT/windows/*.evtx
+$CASE_ROOT/linux/**/*.log
+~/captures/*.pcap
+EOF
+
+gulp-cli ingest zip-create '$CASE_ROOT/evidence.zip' --paths-file /tmp/evidence_paths.txt --overwrite
+
+# Then ingest the generated ZIP
+gulp-cli ingest zip incident-001 '$CASE_ROOT/evidence.zip' --wait
 ```
 
 ### Raw Payload Ingestion

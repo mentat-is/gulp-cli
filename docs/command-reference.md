@@ -520,6 +520,8 @@ gulp-cli ingest file-to-source source123 '/new/*.evtx'
 
 Ingest from a ZIP archive.
 
+> TO BE DEPRECATED...
+
 ```bash
 gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 ```
@@ -527,7 +529,7 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 **Arguments:**
 
 - `OPERATION_ID` — Target operation
-- `ZIP_FILE` — Path to ZIP file
+- `ZIP_FILE` — Path to ZIP file containing a `metadata.json` in the root, describing the content as specified in gulp's `ingest_zip` docs.
 
 **Options:**
 
@@ -542,6 +544,47 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 ```bash
 gulp-cli ingest zip my_op /data/evidence.zip --wait
 gulp-cli ingest zip my_op /data/evidence.zip --create-operation
+```
+
+---
+
+#### `zip-create`
+
+Create a ZIP archive from one or more source path expressions.
+
+Path expressions may be:
+
+- a single file path
+- a directory path
+- a glob mask (for example `/bla/somef*.txt`, `/bla/*`, `**/*.evtx`)
+
+Environment variables and home shortcuts are expanded in all input paths (for example `$EVIDENCE_DIR/*.evtx`, `~/cases/case-01/*`).
+
+```bash
+gulp-cli ingest zip-create OUTPUT_ZIP [PATH_PATTERN...] [OPTIONS]
+```
+
+**Arguments:**
+
+- `OUTPUT_ZIP` — Destination ZIP path (supports environment variables and `~`)
+- `PATH_PATTERN` — File, directory, or glob path expression (multiple allowed)
+
+**Options:**
+
+- `--paths-file TEXT` — Text file with one source path expression per line (supports environment variables and `~` per line)
+- `--overwrite` — Overwrite output ZIP if it already exists
+
+**Examples:**
+
+```bash
+# Create a ZIP from mixed path expressions
+gulp-cli ingest zip-create /tmp/evidence.zip /data/host1/*.evtx /data/host2 /data/readme.txt
+
+# Use environment variables and home shortcuts
+gulp-cli ingest zip-create '$CASE_DIR/evidence.zip' '$CASE_DIR/raw/*.json' '~/pcaps/*.pcap' --overwrite
+
+# Read source path expressions from a file
+gulp-cli ingest zip-create /tmp/evidence.zip --paths-file /tmp/evidence_paths.txt --overwrite
 ```
 
 ---
