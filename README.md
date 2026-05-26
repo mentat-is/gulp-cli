@@ -29,6 +29,9 @@ All with **beautiful terminal output**, **automatic tab completion**, and **asyn
 # from pip
 pip install gulp-cli
 
+# or install local portable-build tooling
+pip install 'gulp-cli[portable]'
+
 # or, for the latest development version:
 python3 -m venv ./.venv
 source ./.venv/bin/activate
@@ -39,10 +42,20 @@ cd gulp-cli && pip install -e .
 gulp-cli --help
 ```
 
+### Portable Bundles
+
+For offline use from a USB stick, prefer the OS-specific portable bundles built with PyInstaller instead of `pip install`.
+
+- Each target OS needs its own bundle: Linux, Windows, macOS Intel, macOS Apple Silicon.
+- Portable bundles keep config and external extensions in a local `data/` directory next to the executable.
+- You can override that location with `GULP_CLI_HOME` or `--config-dir`.
+
+See **[Portable Usage](./docs/portable.md)** for the layout, local build command, and CI artifact details.
+
 ### Basic Usage
 
 > for the cli to work, set `"ws_ignore_missing": true` (should be default in the v1.6.51 backend, though ...) in your `gulp_cfg.json` to prevent the backend from halting operations when the CLI disconnects its websocket after sending an async request!
- 
+
 ```bash
 # Login to your gULP instance
 gulp-cli auth login --url http://localhost:8080 --username admin --password admin
@@ -59,6 +72,7 @@ gulp-cli ingest file my_operation win_evtx 'samples/win_evtx/*.evtx'
 # Query documents
 gulp-cli query raw my_operation --q '{"query":{"match_all":{}}}'
 ```
+
 ---
 
 ## 📚 Documentation
@@ -66,6 +80,7 @@ gulp-cli query raw my_operation --q '{"query":{"match_all":{}}}'
 - **[Getting Started Guide](./docs/getting-started.md)** — auth, first operation, first ingest
 - **[Command Reference](./docs/command-reference.md)** — all available commands and options
 - **[Extensions Guide](./docs/extensions.md)** — dynamic extension loading and custom command contract
+- **[Portable Usage](./docs/portable.md)** — offline bundles and USB-friendly layout
 - **[Resource Management Commands](./docs/resource-management.md)** — context, source, plugin, mapping, enhance-map, glyph
 - **[Practical Examples](./docs/examples.md)** — real-world workflows and recipes
 - **[Troubleshooting](./docs/troubleshooting-cli.md)** — common issues and solutions

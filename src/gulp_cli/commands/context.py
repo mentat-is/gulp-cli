@@ -72,7 +72,6 @@ def context_get(
 def context_create(
     operation_id: str = typer.Argument(..., help="Operation ID"),
     context_name: str = typer.Argument(..., help="Context name"),
-    description: str | None = typer.Option(None, "--description", help="Context description"),
     color: str | None = typer.Option(None, "--color", help="Context color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the context"),
     fail_if_exists: bool = typer.Option(False, "--fail-if-exists", help="Fail if context already exists"),
@@ -83,7 +82,6 @@ def context_create(
             context = await client.operations.context_create(
                 operation_id,
                 context_name,
-                description=description,
                 color=color,
                 glyph_id=glyph_id,
                 fail_if_exists=fail_if_exists,
@@ -96,20 +94,18 @@ def context_create(
 @app.command("update")
 def context_update(
     context_id: str = typer.Argument(..., help="Context ID"),
-    description: str | None = typer.Option(None, "--description", help="Context description"),
     color: str | None = typer.Option(None, "--color", help="Context color (hex format)"),
     glyph_id: str | None = typer.Option(None, "--glyph-id", help="Glyph ID for the context"),
 ) -> None:
     """Update an existing context."""
     async def _run() -> None:
-        if not any([description, color, glyph_id]):
-            typer.echo("Error: At least one of --description, --color, or --glyph-id must be provided", err=True)
+        if not any([color, glyph_id]):
+            typer.echo("Error: At least one of --color or --glyph-id must be provided", err=True)
             raise typer.Exit(1)
 
         async with get_client() as client:
             context = await client.operations.context_update(
                 context_id,
-                description=description,
                 color=color,
                 glyph_id=glyph_id,
             )

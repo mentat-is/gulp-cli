@@ -1,18 +1,64 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
-CONFIG_DIR = Path.home() / ".config" / "gulp-cli"
-CONFIG_PATH = CONFIG_DIR / "config.json"
-_AS_USER_OVERRIDE: ContextVar[str | None] = ContextVar("gulp_cli_as_user_override", default=None)
-_VERBOSE_OVERRIDE: ContextVar[bool] = ContextVar("gulp_cli_verbose_override", default=False)
+PORTABLE_HOME_ENV_VAR = "GULP_CLI_HOME"
+_CONFIG_DIR_OVERRIDE: ContextVar[Path | None] = ContextVar(
+    "gulp_cli_config_dir_override", default=None
+)
+_AS_USER_OVERRIDE: ContextVar[str | None] = ContextVar(
+    "gulp_cli_as_user_override", default=None
+)
+_VERBOSE_OVERRIDE: ContextVar[bool] = ContextVar(
+    "gulp_cli_verbose_override", default=False
+)
 
 
 class CLIConfigError(Exception):
     """Raised when CLI config is missing or invalid."""
+
+
+def get_config_dir() -> Path:
+    override = _CONFIG_DIR_OVERRIDE.get()
+    if override is not None:
+        return override
+
+    env_override = str(os.environ.get(PORTABLE_HOME_ENV_VAR) or "").strip()
+    if env_override:
+        return Path(env_override).expanduser().resolve()
+
+    if getattr(sys, "frozen", False):
+        portable_dir = Path(sys.executable).resolve().parent / "data"
+        if portable_dir.exists():
+            return portable_dir
+
+    return Path.home() / ".config" / "gulp-cli"
+
+
+def get_config_path() -> Path:
+    return get_config_dir() / "config.json"
+
+
+def get_extensions_dir() -> Path:
+    return get_config_dir() / "extension"
+
+
+def set_runtime_config_dir(config_dir: str | Path | None) -> None:
+    if config_dir is None:
+        _CONFIG_DIR_OVERRIDE.set(None)
+        return
+
+    value = str(config_dir).strip()
+    if not value:
+        _CONFIG_DIR_OVERRIDE.set(None)
+        return
+
+    _CONFIG_DIR_OVERRIDE.set(Path(value).expanduser().resolve())
 
 
 def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
@@ -62,26 +108,34 @@ def _normalize_config(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
+    config_path = get_config_path()
+    if not config_path.exists():
         return {"active_user": "", "sessions": {}}
     try:
-        raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise CLIConfigError(f"Invalid config JSON in {CONFIG_PATH}: {exc}") from exc
+        raise CLIConfigError(f"Invalid config JSON in {config_path}: {exc}") from exc
     if not isinstance(raw, dict):
-        raise CLIConfigError(f"Invalid config JSON in {CONFIG_PATH}: root object must be a JSON object")
+        raise CLIConfigError(
+            f"Invalid config JSON in {config_path}: root object must be a JSON object"
+        )
     return _normalize_config(raw)
 
 
 def save_config(data: dict[str, Any]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    config_dir = get_config_dir()
+    config_path = get_config_path()
+    config_dir.mkdir(parents=True, exist_ok=True)
     normalized = _normalize_config(data)
-    CONFIG_PATH.write_text(json.dumps(normalized, indent=2, sort_keys=True), encoding="utf-8")
+    config_path.write_text(
+        json.dumps(normalized, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
 
 def clear_config() -> None:
-    if CONFIG_PATH.exists():
-        CONFIG_PATH.unlink()
+    config_path = get_config_path()
+    if config_path.exists():
+        config_path.unlink()
 
 
 def set_runtime_as_user(user_name: str | None) -> None:
@@ -133,10 +187,14 @@ def save_session(
 def get_selected_session(user_name: str | None = None) -> dict[str, Any]:
     cfg = load_config()
     sessions = cfg.get("sessions") or {}
-    selected = (user_name or get_runtime_as_user() or cfg.get("active_user") or "").strip()
+    selected = (
+        user_name or get_runtime_as_user() or cfg.get("active_user") or ""
+    ).strip()
 
     if not sessions:
-        raise CLIConfigError("Not authenticated. Run: gulp-cli auth login --url <url> --username <u> --password <p>")
+        raise CLIConfigError(
+            "Not authenticated. Run: gulp-cli auth login --url <url> --username <u> --password <p>"
+        )
 
     if not selected:
         selected = next(iter(sessions), "")
@@ -154,7 +212,9 @@ def get_selected_session(user_name: str | None = None) -> dict[str, Any]:
 def delete_session(user_name: str | None = None) -> dict[str, Any] | None:
     cfg = load_config()
     sessions = dict(cfg.get("sessions") or {})
-    selected = (user_name or get_runtime_as_user() or cfg.get("active_user") or "").strip()
+    selected = (
+        user_name or get_runtime_as_user() or cfg.get("active_user") or ""
+    ).strip()
     if not selected:
         return None
 
@@ -178,5 +238,7 @@ def get_required_url_token() -> tuple[str, str]:
     url = str(session.get("url") or "").strip()
     token = str(session.get("token") or "").strip()
     if not url or not token:
-        raise CLIConfigError("Not authenticated. Run: gulp-cli auth login --url <url> --username <u> --password <p>")
+        raise CLIConfigError(
+            "Not authenticated. Run: gulp-cli auth login --url <url> --username <u> --password <p>"
+        )
     return url, token

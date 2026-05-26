@@ -8,11 +8,10 @@ from typing import Any, Callable
 import typer
 
 from gulp_cli.client import get_client
-from gulp_cli.config import CONFIG_DIR
+from gulp_cli.config import get_extensions_dir
 from gulp_cli.output import print_warning
 
 INTERNAL_EXTENSIONS_DIR = Path(__file__).resolve().parent / "extension"
-EXTERNAL_EXTENSIONS_DIR = CONFIG_DIR / "extension"
 
 
 def _is_valid_extension_file(path: Path) -> bool:
@@ -32,8 +31,9 @@ def discover_extensions() -> dict[str, Path]:
             if _is_valid_extension_file(path):
                 discovered[path.name] = path
 
-    if EXTERNAL_EXTENSIONS_DIR.exists():
-        for path in sorted(EXTERNAL_EXTENSIONS_DIR.iterdir()):
+    external_extensions_dir = get_extensions_dir()
+    if external_extensions_dir.exists():
+        for path in sorted(external_extensions_dir.iterdir()):
             if _is_valid_extension_file(path):
                 discovered[path.name] = path
 
@@ -67,8 +67,7 @@ def _call_register_extension(
 
     signature = inspect.signature(register_fn)
     accepts_var_kwargs = any(
-        p.kind == inspect.Parameter.VAR_KEYWORD
-        for p in signature.parameters.values()
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()
     )
 
     kwargs: dict[str, Any] = {}

@@ -21,7 +21,11 @@ from gulp_cli.commands.user_group import app as user_group_app
 from gulp_cli.commands.users import app as user_app
 from gulp_sdk.client import GulpClient
 
-from gulp_cli.config import set_runtime_as_user, set_runtime_verbose
+from gulp_cli.config import (
+    set_runtime_as_user,
+    set_runtime_config_dir,
+    set_runtime_verbose,
+)
 from gulp_cli.extensions import load_extensions
 
 app = typer.Typer(
@@ -37,13 +41,23 @@ def _show_versions(value: bool) -> None:
     from gulp_cli._version import __version__, __commit_id__
 
     sdk_version = GulpClient("http://localhost:8080").version()
-    print(f"gulp-cli version: {__version__} ({__commit_id__})" if __commit_id__ else __version__)
+    print(
+        f"gulp-cli version: {__version__} ({__commit_id__})"
+        if __commit_id__
+        else __version__
+    )
     print(f"gulp-sdk version: {sdk_version}")
     raise typer.Exit()
 
 
 @app.callback(invoke_without_command=True)
 def main(
+    config_dir: str | None = typer.Option(
+        None,
+        "--config-dir",
+        envvar="GULP_CLI_HOME",
+        help="Override the CLI home directory for config and external extensions.",
+    ),
     as_user: str | None = typer.Option(
         None,
         "--as-user",
@@ -62,8 +76,10 @@ def main(
         help="Show CLI and SDK versions and exit.",
     ),
 ) -> None:
+    set_runtime_config_dir(config_dir)
     set_runtime_as_user(as_user)
     set_runtime_verbose(verbose)
+
 
 app.add_typer(auth_app, name="auth")
 app.add_typer(user_app, name="user")
