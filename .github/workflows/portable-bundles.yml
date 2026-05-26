@@ -3,7 +3,12 @@ name: Portable bundles
 "on":
   push:
     tags: ['v*', 'test-v*']
+  release:
+    types: [published]
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build-portable:
@@ -72,9 +77,33 @@ jobs:
           path: dist/${{ matrix.bundle_name }}
           if-no-files-found: error
 
+      - name: Create release archive
+        shell: python
+        env:
+          BUNDLE_NAME: ${{ matrix.bundle_name }}
+        run: |
+          import os
+          import shutil
+          from pathlib import Path
+
+          dist_dir = Path("dist")
+          bundle_name = os.environ["BUNDLE_NAME"]
+          bundle_dir = dist_dir / bundle_name
+          archive_base = dist_dir / bundle_name
+          shutil.make_archive(str(archive_base), "zip", root_dir=bundle_dir.parent, base_dir=bundle_dir.name)
+
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/${{ matrix.bundle_name }}.zip
+          fail_on_unmatched_files: true
+
   build-portable-macos-x64:
     name: Build portable bundle (gulp-cli-portable-macos-x64)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+    continue-on-error: ${{ github.event_name == 'release' }}
     runs-on: macos-15-intel
     timeout-minutes: 90
 
@@ -125,3 +154,26 @@ jobs:
           name: gulp-cli-portable-macos-x64
           path: dist/gulp-cli-portable-macos-x64
           if-no-files-found: error
+
+      - name: Create release archive
+        shell: python
+        env:
+          BUNDLE_NAME: gulp-cli-portable-macos-x64
+        run: |
+          import os
+          import shutil
+          from pathlib import Path
+
+          dist_dir = Path("dist")
+          bundle_name = os.environ["BUNDLE_NAME"]
+          bundle_dir = dist_dir / bundle_name
+          archive_base = dist_dir / bundle_name
+          shutil.make_archive(str(archive_base), "zip", root_dir=bundle_dir.parent, base_dir=bundle_dir.name)
+
+      - name: Upload release asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/gulp-cli-portable-macos-x64.zip
+          fail_on_unmatched_files: true
