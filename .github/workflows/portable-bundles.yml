@@ -9,6 +9,7 @@ jobs:
   build-portable:
     name: Build portable bundle (${{ matrix.bundle_name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -19,9 +20,6 @@ jobs:
           - os: windows-latest
             bundle_name: gulp-cli-portable-windows-x64
             launcher_path: portable/launch-windows.bat
-          - os: macos-13
-            bundle_name: gulp-cli-portable-macos-x64
-            launcher_path: portable/launch-macos.sh
           - os: macos-14
             bundle_name: gulp-cli-portable-macos-arm64
             launcher_path: portable/launch-macos.sh
@@ -72,4 +70,58 @@ jobs:
         with:
           name: ${{ matrix.bundle_name }}
           path: dist/${{ matrix.bundle_name }}
+          if-no-files-found: error
+
+  build-portable-macos-x64:
+    name: Build portable bundle (gulp-cli-portable-macos-x64)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --noconfirm --clean gulp-cli.spec
+
+      - name: Assemble portable layout
+        shell: python
+        env:
+          BUNDLE_NAME: gulp-cli-portable-macos-x64
+          LAUNCHER_PATH: portable/launch-macos.sh
+        run: |
+          import os
+          import shutil
+          from pathlib import Path
+
+          dist_dir = Path("dist")
+          source_dir = dist_dir / "gulp-cli"
+          bundle_dir = dist_dir / os.environ["BUNDLE_NAME"]
+          launcher_path = Path(os.environ["LAUNCHER_PATH"])
+
+          if bundle_dir.exists():
+              shutil.rmtree(bundle_dir)
+
+          shutil.copytree(source_dir, bundle_dir)
+          (bundle_dir / "data" / "extension").mkdir(parents=True, exist_ok=True)
+          shutil.copy2(launcher_path, bundle_dir / launcher_path.name)
+          shutil.copy2("README.md", bundle_dir / "README.md")
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gulp-cli-portable-macos-x64
+          path: dist/gulp-cli-portable-macos-x64
           if-no-files-found: error
