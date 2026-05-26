@@ -13,10 +13,23 @@ import typer
 from gulp_sdk.exceptions import NotFoundError
 from gulp_sdk.websocket import WSMessage, WSMessageType
 from rich.markup import escape
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeElapsedColumn,
+)
 
 from gulp_cli.client import get_client
-from gulp_cli.output import console, print_error, print_json, print_result, print_warning
+from gulp_cli.output import (
+    console,
+    print_error,
+    print_json,
+    print_result,
+    print_warning,
+)
 from gulp_cli.utils import parse_json_option
 
 app = typer.Typer(help="Ingestion commands")
@@ -41,9 +54,7 @@ async def _ensure_operation_exists(
             raise
         await client.operations.create(name=operation_id)
         if not get_runtime_verbose():
-            print_warning(
-                f"Operation {operation_id} was missing and has been created."
-            )
+            print_warning(f"Operation {operation_id} was missing and has been created.")
 
 
 def _expand_file_patterns(file_patterns: list[str]) -> list[str]:
@@ -85,9 +96,7 @@ def _expand_zip_source_patterns(
             "Provide paths either as arguments or via --paths-file, not both"
         )
     if not path_patterns and paths_file is None:
-        raise typer.BadParameter(
-            "Provide at least one path argument or --paths-file"
-        )
+        raise typer.BadParameter("Provide at least one path argument or --paths-file")
 
     raw_entries = list(path_patterns)
     if paths_file is not None:
@@ -110,9 +119,14 @@ def _expand_zip_source_patterns(
         if has_magic(expanded_entry):
             pattern_path = Path(expanded_entry)
             base_dir = _resolve_glob_base(pattern_path)
-            matches = [Path(match).resolve() for match in sorted(glob(expanded_entry, recursive=True))]
+            matches = [
+                Path(match).resolve()
+                for match in sorted(glob(expanded_entry, recursive=True))
+            ]
             if not matches:
-                raise typer.BadParameter(f"Path mask did not match any files: {expanded_entry}")
+                raise typer.BadParameter(
+                    f"Path mask did not match any files: {expanded_entry}"
+                )
 
             for match in matches:
                 item = (match, base_dir)
@@ -151,7 +165,9 @@ def _resolve_glob_base(pattern_path: Path) -> Path:
     return base_dir.resolve()
 
 
-def _build_zip_from_sources(output_zip: Path, sources: list[tuple[Path, Path]]) -> tuple[int, list[str]]:
+def _build_zip_from_sources(
+    output_zip: Path, sources: list[tuple[Path, Path]]
+) -> tuple[int, list[str]]:
     output_zip.parent.mkdir(parents=True, exist_ok=True)
 
     archived_entries: list[str] = []
@@ -167,7 +183,9 @@ def _build_zip_from_sources(output_zip: Path, sources: list[tuple[Path, Path]]) 
         seen_archive_entries.add(entry_name)
         archived_entries.append(entry_name)
 
-    def _record_file(source_path: Path, archive_name_str: str, archive: zipfile.ZipFile) -> None:
+    def _record_file(
+        source_path: Path, archive_name_str: str, archive: zipfile.ZipFile
+    ) -> None:
         nonlocal archived_count
         if archive_name_str in seen_archive_entries or source_path in seen_source_files:
             return
@@ -177,7 +195,9 @@ def _build_zip_from_sources(output_zip: Path, sources: list[tuple[Path, Path]]) 
         archived_entries.append(archive_name_str)
         archived_count += 1
 
-    with zipfile.ZipFile(output_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(
+        output_zip, mode="w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
         for source_path, base_dir in sources:
             archive_root = source_path.relative_to(base_dir)
 
@@ -260,7 +280,9 @@ async def _wait_for_completion(
     """
 
     ws = await client.ensure_websocket()
-    req_to_file: dict[str, str] = {rid: file_path for file_path, rid in file_req_map.items()}
+    req_to_file: dict[str, str] = {
+        rid: file_path for file_path, rid in file_req_map.items()
+    }
 
     def _extract_payload_obj(msg: WSMessage) -> dict[str, Any]:
         if not isinstance(msg.data, dict):
@@ -281,10 +303,12 @@ async def _wait_for_completion(
         nested = payload.get("data")
         nested_data = nested if isinstance(nested, dict) else {}
         has_top = any(
-            key in payload for key in ("records_ingested", "records_skipped", "records_failed")
+            key in payload
+            for key in ("records_ingested", "records_skipped", "records_failed")
         )
         has_nested = any(
-            key in nested_data for key in ("records_ingested", "records_skipped", "records_failed")
+            key in nested_data
+            for key in ("records_ingested", "records_skipped", "records_failed")
         )
         ingested = _to_int(payload.get("records_ingested"))
         skipped = _to_int(payload.get("records_skipped"))
@@ -345,7 +369,9 @@ async def _wait_for_completion(
             obj = _extract_payload_obj(msg)
 
             if msg.type == WSMessageType.INGEST_SOURCE_DONE.value:
-                done_ingested, done_skipped, done_failed, _ = _extract_ingest_counters(obj)
+                done_ingested, done_skipped, done_failed, _ = _extract_ingest_counters(
+                    obj
+                )
                 state["ingested"] += done_ingested
                 state["skipped"] += done_skipped
                 state["failed"] += done_failed
@@ -360,7 +386,10 @@ async def _wait_for_completion(
                 )
                 return
 
-            if msg.type in (WSMessageType.STATS_CREATE.value, WSMessageType.STATS_UPDATE.value):
+            if msg.type in (
+                WSMessageType.STATS_CREATE.value,
+                WSMessageType.STATS_UPDATE.value,
+            ):
                 state["stats"] = obj
                 status = str(obj.get("status", state["status"]))
                 pct = obj.get("ingest_percentage")
@@ -368,7 +397,9 @@ async def _wait_for_completion(
                     progress.update(tid, completed=pct, total=100)
 
                 # Request stats counters are authoritative snapshots.
-                stats_ingested, stats_skipped, stats_failed, has_stats_counters = _extract_ingest_counters(obj)
+                stats_ingested, stats_skipped, stats_failed, has_stats_counters = (
+                    _extract_ingest_counters(obj)
+                )
                 if has_stats_counters:
                     state["ingested"] = stats_ingested
                     state["skipped"] = stats_skipped
@@ -451,7 +482,9 @@ async def _wait_for_completion(
                     pass
 
             if state is None:
-                results.append({"file": file_path, "req_id": req_id, "status": "unknown"})
+                results.append(
+                    {"file": file_path, "req_id": req_id, "status": "unknown"}
+                )
             elif get_runtime_verbose():
                 results.append(
                     {
@@ -489,8 +522,12 @@ def ingest_file(
         help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
     ),
     context_name: str = typer.Option("sdk_context", "--context-name"),
-    plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params"),
-    flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
+    plugin_params: str | None = typer.Option(
+        None, "--plugin-params", help="JSON object for plugin_params"
+    ),
+    flt: str | None = typer.Option(
+        None, "--flt", help="JSON object for GulpIngestionFilter"
+    ),
     reset_operation: bool = typer.Option(
         False,
         "--reset-operation",
@@ -515,7 +552,9 @@ def ingest_file(
             "reception of each request via STATS_CREATE websocket event."
         ),
     ),
-    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait for completion (only used with --wait)"),
+    wait_timeout: int = typer.Option(
+        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+    ),
 ) -> None:
     """Ingest one or more files (supports glob patterns).
 
@@ -537,7 +576,9 @@ def ingest_file(
         if preview and wait:
             raise typer.BadParameter("--preview and --wait are mutually exclusive")
         if preview and reset_operation:
-            raise typer.BadParameter("--preview and --reset-operation are mutually exclusive")
+            raise typer.BadParameter(
+                "--preview and --reset-operation are mutually exclusive"
+            )
         if reset_operation and create_operation_if_missing:
             raise typer.BadParameter(
                 "--reset-operation and --create-operation are mutually exclusive"
@@ -549,7 +590,10 @@ def ingest_file(
             await client.ensure_websocket()
 
             params = {
-                "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
+                "plugin_params": parse_json_option(
+                    plugin_params, field_name="plugin-params"
+                )
+                or {},
                 "flt": parse_json_option(flt, field_name="flt") or {},
             }
 
@@ -592,7 +636,10 @@ def ingest_file(
                     plugin_name=plugin,
                     file_path=file_path,
                     context_name=context_name,
-                    params={**params, "original_file_path": str(Path(file_path).resolve())},
+                    params={
+                        **params,
+                        "original_file_path": str(Path(file_path).resolve()),
+                    },
                     wait=False,  # we handle waiting ourselves below
                 )
                 if hasattr(result, "model_dump"):
@@ -606,8 +653,12 @@ def ingest_file(
             fired: list[tuple[str, str, dict[str, Any]]] = await asyncio.gather(
                 *[_fire_one(path) for path in unique_files]
             )
-            file_req_map: dict[str, str] = {file_path: req_id for file_path, req_id, _ in fired}
-            fired_meta: dict[str, dict[str, Any]] = {req_id: payload for _, req_id, payload in fired if req_id}
+            file_req_map: dict[str, str] = {
+                file_path: req_id for file_path, req_id, _ in fired
+            }
+            fired_meta: dict[str, dict[str, Any]] = {
+                req_id: payload for _, req_id, payload in fired if req_id
+            }
 
             if wait:
                 # --wait: block until terminal status via websocket
@@ -651,8 +702,14 @@ def ingest_file_to_source(
         ...,
         help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
     ),
-    plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params (overrides source defaults)"),
-    flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
+    plugin_params: str | None = typer.Option(
+        None,
+        "--plugin-params",
+        help="JSON object for plugin_params (overrides source defaults)",
+    ),
+    flt: str | None = typer.Option(
+        None, "--flt", help="JSON object for GulpIngestionFilter"
+    ),
     wait: bool = typer.Option(
         False,
         "--wait",
@@ -662,7 +719,9 @@ def ingest_file_to_source(
             "reception of each request via STATS_CREATE websocket event."
         ),
     ),
-    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait for completion (only used with --wait)"),
+    wait_timeout: int = typer.Option(
+        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+    ),
 ) -> None:
     """Ingest one or more files into an existing source."""
 
@@ -676,7 +735,10 @@ def ingest_file_to_source(
             await client.ensure_websocket()
 
             params = {
-                "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
+                "plugin_params": parse_json_option(
+                    plugin_params, field_name="plugin-params"
+                )
+                or {},
                 "flt": parse_json_option(flt, field_name="flt") or {},
             }
 
@@ -698,8 +760,12 @@ def ingest_file_to_source(
             fired: list[tuple[str, str, dict[str, Any]]] = await asyncio.gather(
                 *[_fire_one(path) for path in unique_files]
             )
-            file_req_map: dict[str, str] = {file_path: req_id for file_path, req_id, _ in fired}
-            fired_meta: dict[str, dict[str, Any]] = {req_id: payload for _, req_id, payload in fired if req_id}
+            file_req_map: dict[str, str] = {
+                file_path: req_id for file_path, req_id, _ in fired
+            }
+            fired_meta: dict[str, dict[str, Any]] = {
+                req_id: payload for _, req_id, payload in fired if req_id
+            }
 
             if wait:
                 results = await _wait_for_completion(client, file_req_map, wait_timeout)
@@ -741,7 +807,9 @@ def ingest_zip(
         help="Path to a ZIP file which must contain a `metadata.json` in the root, describing the content as specified in gulp's `ingest_zip` docs.",
     ),
     context_name: str = typer.Option("sdk_context", "--context-name"),
-    flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
+    flt: str | None = typer.Option(
+        None, "--flt", help="JSON object for GulpIngestionFilter"
+    ),
     reset_operation: bool = typer.Option(
         False,
         "--reset-operation",
@@ -753,7 +821,9 @@ def ingest_zip(
         help="Create operation automatically when it does not exist",
     ),
     wait: bool = typer.Option(False, "--wait", help="Wait for ingestion completion"),
-    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait for completion (only used with --wait)"),
+    wait_timeout: int = typer.Option(
+        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+    ),
 ) -> None:
     """Ingest a ZIP archive into an operation."""
 
@@ -807,7 +877,11 @@ def ingest_zip(
 
             if wait:
                 waited = await _wait_for_completion(client, file_req_map, wait_timeout)
-                print_result(waited[0] if waited else {"file": zip_file, "req_id": req_id, "status": "unknown"})
+                print_result(
+                    waited[0]
+                    if waited
+                    else {"file": zip_file, "req_id": req_id, "status": "unknown"}
+                )
             else:
                 timed_out = await _wait_for_stats_create(client, [req_id])
                 if timed_out and not get_runtime_verbose():
@@ -825,7 +899,9 @@ def ingest_zip(
                         }
                     )
                 else:
-                    print_result({"file": zip_file, "req_id": req_id, "status": "pending"})
+                    print_result(
+                        {"file": zip_file, "req_id": req_id, "status": "pending"}
+                    )
 
     asyncio.run(_run())
 
@@ -861,7 +937,9 @@ def ingest_zip_create(
             f"Output ZIP already exists: {output_path}. Use --overwrite to replace it"
         )
 
-    archived_count, archived_entries = _build_zip_from_sources(output_path, source_paths)
+    archived_count, archived_entries = _build_zip_from_sources(
+        output_path, source_paths
+    )
     print_result(
         {
             "zip_file": str(output_path),
@@ -879,13 +957,27 @@ def ingest_zip_create(
 @app.command("raw")
 def ingest_raw(
     operation_id: str,
-    data: str | None = typer.Option(None, "--data", help="Raw payload text (JSON recommended)"),
-    data_file: str | None = typer.Option(None, "--data-file", help="Path to file containing raw payload"),
-    plugin: str = typer.Option("raw", "--plugin", help="Plugin used to process the raw payload"),
-    plugin_params: str | None = typer.Option(None, "--plugin-params", help="JSON object for plugin_params"),
-    flt: str | None = typer.Option(None, "--flt", help="JSON object for GulpIngestionFilter"),
-    req_id: str | None = typer.Option(None, "--req-id", help="Optional request ID for chunked ingestion"),
-    last: bool = typer.Option(False, "--last", help="Mark this payload as the last raw chunk"),
+    data: str | None = typer.Option(
+        None, "--data", help="Raw payload text (JSON recommended)"
+    ),
+    data_file: str | None = typer.Option(
+        None, "--data-file", help="Path to file containing raw payload"
+    ),
+    plugin: str = typer.Option(
+        "raw", "--plugin", help="Plugin used to process the raw payload"
+    ),
+    plugin_params: str | None = typer.Option(
+        None, "--plugin-params", help="JSON object for plugin_params"
+    ),
+    flt: str | None = typer.Option(
+        None, "--flt", help="JSON object for GulpIngestionFilter"
+    ),
+    req_id: str | None = typer.Option(
+        None, "--req-id", help="Optional request ID for chunked ingestion"
+    ),
+    last: bool = typer.Option(
+        False, "--last", help="Mark this payload as the last raw chunk"
+    ),
     reset_operation: bool = typer.Option(
         False,
         "--reset-operation",
@@ -897,11 +989,15 @@ def ingest_raw(
         help="Create operation automatically when it does not exist",
     ),
     wait: bool = typer.Option(False, "--wait", help="Wait for ingestion completion"),
-    wait_timeout: int = typer.Option(300, "--timeout", help="Seconds to wait for completion (only used with --wait)"),
+    wait_timeout: int = typer.Option(
+        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+    ),
 ) -> None:
     """Ingest raw payload into an operation."""
 
-    if (data is None and data_file is None) or (data is not None and data_file is not None):
+    if (data is None and data_file is None) or (
+        data is not None and data_file is not None
+    ):
         raise typer.BadParameter("Provide exactly one of --data or --data-file")
 
     async def _run() -> None:
@@ -928,7 +1024,9 @@ def ingest_raw(
                 )
 
             if data_file is not None:
-                payload_data: dict[str, Any] | str | bytes = Path(data_file).read_bytes()
+                payload_data: dict[str, Any] | str | bytes = Path(
+                    data_file
+                ).read_bytes()
             else:
                 assert data is not None
                 try:
@@ -937,7 +1035,10 @@ def ingest_raw(
                     payload_data = data
 
             params: dict[str, Any] = {
-                "plugin_params": parse_json_option(plugin_params, field_name="plugin-params") or {},
+                "plugin_params": parse_json_option(
+                    plugin_params, field_name="plugin-params"
+                )
+                or {},
                 "flt": parse_json_option(flt, field_name="flt") or {},
                 "last": last,
             }
@@ -970,7 +1071,11 @@ def ingest_raw(
                 print_result(
                     waited[0]
                     if waited
-                    else {"file": request_label, "req_id": resolved_req_id, "status": "unknown"}
+                    else {
+                        "file": request_label,
+                        "req_id": resolved_req_id,
+                        "status": "unknown",
+                    }
                 )
             else:
                 timed_out = await _wait_for_stats_create(client, [resolved_req_id])
@@ -990,7 +1095,11 @@ def ingest_raw(
                     )
                 else:
                     print_result(
-                        {"file": request_label, "req_id": resolved_req_id, "status": "pending"}
+                        {
+                            "file": request_label,
+                            "req_id": resolved_req_id,
+                            "status": "pending",
+                        }
                     )
 
     asyncio.run(_run())
