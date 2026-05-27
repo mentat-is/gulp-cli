@@ -74,3 +74,40 @@ The repository includes a matrix workflow that builds portable artifacts for:
 - macOS `arm64`
 
 Artifacts are uploaded from `.github/workflows/portable-bundles.yml`.
+
+## practical usage examples
+
+following are some practical usage examples of the portable bundles
+
+### ingesting windows evtx files taken from a windows machine and ingesting them on a linux machine
+
+#### step 1: take windows evtx files from a windows machine  
+
+1. Unzip the portable bundle on a USB stick and plug it into the windows machine
+2. Open a command prompt and navigate to the gulp-cli portable bundle on the USB stick
+3. Run the following command to generate the zip with evtx files
+   ~~~bash
+   D:\> cd \path\to\gulp-cli-portable-windows-x64
+   
+   D:\path\to\gulp-cli-portable-windows-x64> .\launch-windows.bat ingest zip-create ./evtx.zip C:\Windows\System32\winevt\Logs\
+   ~~~
+
+#### step 2: ingest the evtx files on a linux machine
+
+> we assume the linux machine have gulp-cli installed and configured to connect to the gULP server, and the user have permissions to ingest data to the gULP server.
+
+1. Go on the linux machine (which can connect to the gULP server) and plug in the USB stick with the portable bundle from above
+2. Open a terminal and navigate to the gulp-cli portable bundle on the USB stick
+3. Unzip the evtx.zip file to a local directory
+    ~~~bash
+    $ cd /path/to/gulp-cli-portable-windows-x64
+    $ unzip evtx.zip
+    # you obtain a `Logs` directory with the evtx files
+    ~~~
+4. Run the following commands to ingest the evtx files to the gULP server
+    ~~~bash
+    # authenticate to the gULP server (if not already authenticated)
+    gulp-cli auth login --url http://localhost:8080 --username admin --password admin
+    # ingest the evtx files to the gULP server, we assume a `test_operation` exists on the gULP server, and we want to ingest the evtx files to that operation
+    gulp-cli ingest file test_operation win_evtx ./Logs/*.evtx
+    ~~~

@@ -199,23 +199,36 @@ def _build_zip_from_sources(
         output_zip, mode="w", compression=zipfile.ZIP_DEFLATED
     ) as archive:
         for source_path, base_dir in sources:
-            archive_root = source_path.relative_to(base_dir)
+            try:
+                archive_root = source_path.relative_to(base_dir)
 
-            if source_path.is_file():
-                _record_file(source_path, archive_root.as_posix(), archive)
-                continue
+                if not source_path.exists():
+                    raise FileNotFoundError(source_path)
 
-            child_paths = sorted(source_path.rglob("*"))
-            if not child_paths:
-                _record_directory(archive_root.as_posix(), archive)
-                continue
-
-            for current_path in child_paths:
-                archive_name_str = current_path.relative_to(base_dir).as_posix()
-                if current_path.is_dir():
-                    _record_directory(archive_name_str, archive)
+                if source_path.is_file():
+                    _record_file(source_path, archive_root.as_posix(), archive)
                     continue
-                _record_file(current_path, archive_name_str, archive)
+
+                child_paths = sorted(source_path.rglob("*"))
+                if not child_paths:
+                    _record_directory(archive_root.as_posix(), archive)
+                    continue
+
+                for current_path in child_paths:
+                    try:
+                        archive_name_str = current_path.relative_to(base_dir).as_posix()
+                        if current_path.is_dir():
+                            _record_directory(archive_name_str, archive)
+                            continue
+                        _record_file(current_path, archive_name_str, archive)
+                    except Exception as exc:
+                        print_error(
+                            f"Skipping {current_path} while creating ZIP {output_zip}: {exc}"
+                        )
+            except Exception as exc:
+                print_error(
+                    f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
+                )
 
     return archived_count, archived_entries
 
@@ -555,6 +568,12 @@ def ingest_file(
     wait_timeout: int = typer.Option(
         300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
     ),
+    batch_size: int = typer.Option(
+        8,
+        "--batch-size",
+        min=1,
+        help="Number of file ingestion requests to submit concurrently per batch.",
+    ),
 ) -> None:
     """Ingest one or more files (supports glob patterns).
 
@@ -649,30 +668,47 @@ def ingest_file(
                 req_id = str(submission.get("req_id") or "")
                 return file_path, req_id, submission
 
-            # Fire all requests concurrently
-            fired: list[tuple[str, str, dict[str, Any]]] = await asyncio.gather(
-                *[_fire_one(path) for path in unique_files]
-            )
-            file_req_map: dict[str, str] = {
-                file_path: req_id for file_path, req_id, _ in fired
-            }
-            fired_meta: dict[str, dict[str, Any]] = {
-                req_id: payload for _, req_id, payload in fired if req_id
-            }
+            # Fire requests in bounded batches; each batch is acknowledged (and,
+            # with --wait, completed) before submitting the next one.
+            file_req_map: dict[str, str] = {}
+            fired_meta: dict[str, dict[str, Any]] = {}
+            all_timed_out: list[str] = []
+            completed_results: list[dict[str, Any]] = []
+
+            for batch_start in range(0, len(unique_files), batch_size):
+                batch_paths = unique_files[batch_start : batch_start + batch_size]
+                fired_batch: list[tuple[str, str, dict[str, Any]]] = (
+                    await asyncio.gather(*[_fire_one(path) for path in batch_paths])
+                )
+
+                batch_map: dict[str, str] = {
+                    file_path: req_id for file_path, req_id, _ in fired_batch
+                }
+                file_req_map.update(batch_map)
+                fired_meta.update(
+                    {req_id: payload for _, req_id, payload in fired_batch if req_id}
+                )
+
+                if wait:
+                    # --wait: block this batch until terminal statuses.
+                    completed_results.extend(
+                        await _wait_for_completion(client, batch_map, wait_timeout)
+                    )
+                else:
+                    # Default: block this batch until backend confirms request registration.
+                    all_timed_out.extend(
+                        await _wait_for_stats_create(client, list(batch_map.values()))
+                    )
 
             if wait:
-                # --wait: block until terminal status via websocket
-                results = await _wait_for_completion(client, file_req_map, wait_timeout)
+                results = completed_results
             else:
-                # Default: keep websocket alive until backend confirms every
-                # request as registered (STATS_CREATE event per req_id).
-                req_ids = list(file_req_map.values())
-                timed_out = await _wait_for_stats_create(client, req_ids)
-                if timed_out and not get_runtime_verbose():
+                timed_out_set = set(all_timed_out)
+                if timed_out_set and not get_runtime_verbose():
                     print_warning(
-                        f"{len(timed_out)} request(s) did not receive STATS_CREATE "
+                        f"{len(timed_out_set)} request(s) did not receive STATS_CREATE "
                         f"within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s — backend may still be processing: "
-                        + ", ".join(timed_out)
+                        + ", ".join(sorted(timed_out_set))
                     )
                 if get_runtime_verbose():
                     results = [
@@ -680,7 +716,7 @@ def ingest_file(
                             "file": fp,
                             "req_id": rid,
                             "submitted": fired_meta.get(rid, {"req_id": rid}),
-                            "ws_confirmed": rid not in timed_out,
+                            "ws_confirmed": rid not in timed_out_set,
                         }
                         for fp, rid in file_req_map.items()
                     ]
@@ -722,6 +758,12 @@ def ingest_file_to_source(
     wait_timeout: int = typer.Option(
         300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
     ),
+    batch_size: int = typer.Option(
+        8,
+        "--batch-size",
+        min=1,
+        help="Number of file ingestion requests to submit concurrently per batch.",
+    ),
 ) -> None:
     """Ingest one or more files into an existing source."""
 
@@ -757,26 +799,43 @@ def ingest_file_to_source(
                 req_id = str(submission.get("req_id") or "")
                 return file_path, req_id, submission
 
-            fired: list[tuple[str, str, dict[str, Any]]] = await asyncio.gather(
-                *[_fire_one(path) for path in unique_files]
-            )
-            file_req_map: dict[str, str] = {
-                file_path: req_id for file_path, req_id, _ in fired
-            }
-            fired_meta: dict[str, dict[str, Any]] = {
-                req_id: payload for _, req_id, payload in fired if req_id
-            }
+            file_req_map: dict[str, str] = {}
+            fired_meta: dict[str, dict[str, Any]] = {}
+            all_timed_out: list[str] = []
+            completed_results: list[dict[str, Any]] = []
+
+            for batch_start in range(0, len(unique_files), batch_size):
+                batch_paths = unique_files[batch_start : batch_start + batch_size]
+                fired_batch: list[tuple[str, str, dict[str, Any]]] = (
+                    await asyncio.gather(*[_fire_one(path) for path in batch_paths])
+                )
+
+                batch_map: dict[str, str] = {
+                    file_path: req_id for file_path, req_id, _ in fired_batch
+                }
+                file_req_map.update(batch_map)
+                fired_meta.update(
+                    {req_id: payload for _, req_id, payload in fired_batch if req_id}
+                )
+
+                if wait:
+                    completed_results.extend(
+                        await _wait_for_completion(client, batch_map, wait_timeout)
+                    )
+                else:
+                    all_timed_out.extend(
+                        await _wait_for_stats_create(client, list(batch_map.values()))
+                    )
 
             if wait:
-                results = await _wait_for_completion(client, file_req_map, wait_timeout)
+                results = completed_results
             else:
-                req_ids = list(file_req_map.values())
-                timed_out = await _wait_for_stats_create(client, req_ids)
-                if timed_out and not get_runtime_verbose():
+                timed_out_set = set(all_timed_out)
+                if timed_out_set and not get_runtime_verbose():
                     print_warning(
-                        f"{len(timed_out)} request(s) did not receive STATS_CREATE "
+                        f"{len(timed_out_set)} request(s) did not receive STATS_CREATE "
                         f"within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s - backend may still be processing: "
-                        + ", ".join(timed_out)
+                        + ", ".join(sorted(timed_out_set))
                     )
                 if get_runtime_verbose():
                     results = [
@@ -784,7 +843,7 @@ def ingest_file_to_source(
                             "file": fp,
                             "req_id": rid,
                             "submitted": fired_meta.get(rid, {"req_id": rid}),
-                            "ws_confirmed": rid not in timed_out,
+                            "ws_confirmed": rid not in timed_out_set,
                         }
                         for fp, rid in file_req_map.items()
                     ]
