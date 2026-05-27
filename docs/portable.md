@@ -109,5 +109,5 @@ following are some practical usage examples of the portable bundles
     # authenticate to the gULP server (if not already authenticated)
     gulp-cli auth login --url http://localhost:8080 --username admin --password admin
     # ingest the evtx files to the gULP server, we assume a `test_operation` exists on the gULP server, and we want to ingest the evtx files to that operation
-    gulp-cli ingest file test_operation win_evtx ./Logs/*.evtx
+    gulp-cli ingest file test_operation win_evtx ./Logs/*.evtx --wait --batch-size 64
     ~~~

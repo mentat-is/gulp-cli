@@ -44,11 +44,13 @@ gulp-cli auth login --url http://localhost:8080 --username admin --password admi
 ```
 
 This:
+
 - Connects to your gULP instance
 - Exchanges credentials for a token
 - Stores the session in `~/.config/gulp-cli/config.json`
 
 **Output should be:**
+
 ```
 ✓ Authentication successful
 Token stored in ~/.config/gulp-cli/config.json
@@ -61,6 +63,7 @@ gulp-cli auth whoami
 ```
 
 **Expected output:**
+
 ```
 ├─ User: admin
 ├─ Permissions: admin
@@ -102,6 +105,7 @@ gulp-cli operation list
 ```
 
 **Expected output:**
+
 ```
 ╭────────────────────────────────────────────────────╮
 │                   OPERATIONS                       │
@@ -121,6 +125,7 @@ gulp-cli operation create my_investigation --description "Investigation into inc
 ```
 
 **Expected output:**
+
 ```
 ✓ Operation created successfully
 ID: my_investigation
@@ -165,6 +170,7 @@ gulp-cli ingest file my_investigation win_evtx /gulp/samples/win_evtx/System.evt
 ```
 
 **Expected output:**
+
 ```
 📥 Ingesting files...
 ✓ /gulp/samples/win_evtx/System.evtx
@@ -177,7 +183,7 @@ Documents queued for processing
 gulp-cli ingest file my_investigation win_evtx '/gulp/samples/win_evtx/*.evtx'
 ```
 
-This ingests all `.evtx` files concurrently.
+This ingests all `.evtx` files using the default batch size (`cores * 2`) and shows per-file progress by default.
 
 ### Preview Before Ingest
 
@@ -193,7 +199,7 @@ This runs parser preview without persisting documents.
 gulp-cli ingest file my_investigation win_evtx '/gulp/samples/win_evtx/*.evtx' --wait
 ```
 
-This shows a real-time progress bar while documents are being ingested.
+This shows a real-time progress bar while documents are being ingested. Per-file progress is enabled by default; use `--no-show-per-file-progress` to suppress the per-file lines.
 
 ### Add Data to Existing Source
 
@@ -234,6 +240,7 @@ gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}'
 ```
 
 **Expected output:**
+
 ```
 ╭────────────────────────────────────────────────────────╮
 │                    QUERY RESULTS                       │

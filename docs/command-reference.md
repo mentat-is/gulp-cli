@@ -455,7 +455,9 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `--create-operation` — Create operation automatically when it does not exist
 - `--preview` — Run preview-only ingestion (no persistence)
 - `--wait` — Wait for completion with progress
+- `--show-per-file-progress / --no-show-per-file-progress` — Show one line per completed file request in `--wait` mode (default: on)
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
+- `--batch-size INTEGER` — Number of file ingestion requests to submit concurrently per window (default: `cores * 2`)
 
 **Examples:**
 
@@ -481,7 +483,7 @@ gulp-cli ingest file my_op win_evtx /path/to/System.evtx --preview
 # Reset operation data before ingest (destructive for collab/request data)
 gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --reset-operation
 
-# Wait for completion
+# Wait for completion (per-file progress is enabled by default)
 gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --wait
 ```
 
@@ -505,7 +507,9 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 - `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults)
 - `--flt TEXT` — JSON object for GulpIngestionFilter
 - `--wait` — Wait for completion with progress
+- `--show-per-file-progress / --no-show-per-file-progress` — Show one line per completed file request in `--wait` mode (default: on)
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
+- `--batch-size INTEGER` — Number of file ingestion requests to submit concurrently per window (default: `cores * 2`)
 
 **Examples:**
 
@@ -1017,6 +1021,7 @@ gulp-cli stats list OPERATION_ID [OPTIONS]
 - Shows only ongoing stats (`--ongoing-only` enabled)
 - Renders a live table (`--live` enabled)
 - Default columns: `user_id`, `ws_id`, `req_id`, `status`, `req_type`, `time_updated`, `data`, `errors`
+- The `data` column shows human-readable source information for ingest stats when available
 
 **Options:**
 

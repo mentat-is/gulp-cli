@@ -142,10 +142,10 @@ cap --plugin-params '{ "mapping_parameters": { "mapping_file": "pcap.json" } }' 
 ### Bulk File Ingestion with Wildcard
 
 ```bash
-# Ingest all .evtx files from directory
+# Ingest all .evtx files from directory (default batch size is `cores * 2`)
 gulp-cli ingest file incident-001 win_evtx '/evidence/**/*.evtx'
 
-# Ingest from multiple locations
+# Ingest from multiple locations (files are processed in alphabetical order)
 gulp-cli ingest file incident-001 win_evtx '/suspect-machine/*.evtx' '/network-share/backups/*.evtx'
 
 # Preview parser output without ingesting
@@ -158,7 +158,7 @@ gulp-cli ingest file incident-001 win_evtx '/suspect-machine/System.evtx' --prev
 # Create operation for multi-source investigation
 gulp-cli operation create incident-2026-001
 
-# Ingest evidence from different sources concurrently
+# Ingest evidence from different sources concurrently (per-file progress is shown by default)
 gulp-cli ingest file incident-2026-001 win_evtx '/forensic/windows/*.evtx' --wait &
 gulp-cli ingest file incident-2026-001 syslog '/forensic/linux/**/*.log' --wait &
 gulp-cli ingest file incident-2026-001 pcap '/forensic/network/*.pcap' --wait &
@@ -195,10 +195,10 @@ gulp-cli ingest file incident-001 json '/logs/**/*.json' --create-operation
 ### Add More Evidence to Existing Source
 
 ```bash
-# First ingestion creates data-2026-001 source
+# First ingestion creates data-2026-001 source (default batch size is `cores * 2`)
 gulp-cli ingest file incident-001 win_evtx /initial/evidence.evtx
 
-# Later, add more files to same source
+# Later, add more files to same source (per-file progress is shown by default)
 gulp-cli ingest file-to-source data-2026-001 /additional/evidence.evtx --wait
 
 # You can also ingest multiple files via glob

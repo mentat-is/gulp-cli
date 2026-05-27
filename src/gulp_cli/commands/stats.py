@@ -8,8 +8,9 @@ from typing import Any
 
 import typer
 from rich.console import Group
-from rich.live import Live
 from rich.progress_bar import ProgressBar
+from rich.live import Live
+from rich.text import Text
 from rich.table import Table
 
 from gulp_cli.client import get_client
@@ -165,22 +166,151 @@ def _to_epoch_msec(value: Any) -> int | None:
     return None
 
 
-def _build_data_cell(stat: dict[str, Any]) -> Group:
+def _extract_source_ids(stat: dict[str, Any]) -> list[str]:
+    data = stat.get("data")
+    if not isinstance(data, dict):
+        return []
+
+    sources = data.get("sources")
+    if not isinstance(sources, list):
+        return []
+
+    source_ids: list[str] = []
+    for item in sources:
+        source_id = ""
+        if isinstance(item, dict):
+            source_id = str(item.get("source_id") or item.get("id") or "").strip()
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            source_id = str(item[1] or "").strip()
+        if source_id:
+            source_ids.append(source_id)
+    return source_ids
+
+
+def _remember_source_ids(
+    stats: list[dict[str, Any]], request_source_ids: dict[str, list[str]]
+) -> None:
+    for stat in stats:
+        req_id = str(stat.get("req_id") or stat.get("id") or "").strip()
+        if not req_id:
+            continue
+        source_ids = _extract_source_ids(stat)
+        if source_ids:
+            request_source_ids[req_id] = source_ids
+
+
+async def _fetch_source_name_lookup(
+    client: Any, source_ids: list[str]
+) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    unique_source_ids = sorted({source_id for source_id in source_ids if source_id})
+    if not unique_source_ids:
+        return lookup
+
+    async def _fetch_one(source_id: str) -> tuple[str, str]:
+        try:
+            source = await client.operations.source_get(source_id)
+            if hasattr(source, "model_dump"):
+                source = source.model_dump(exclude_none=True)
+            if isinstance(source, dict):
+                source_name = str(source.get("name") or source.get("id") or "").strip()
+                return source_id, source_name
+        except Exception:
+            pass
+        return source_id, ""
+
+    results = await asyncio.gather(
+        *[_fetch_one(source_id) for source_id in unique_source_ids]
+    )
+    for source_id, source_name in results:
+        if source_name:
+            lookup[source_id] = source_name
+    return lookup
+
+
+def _multiline_label(label: str, threshold: int = 40) -> str:
+    text = str(label or "").strip()
+    if len(text) <= threshold:
+        return text
+    if "/" in text:
+        is_absolute = text.startswith("/")
+        parts = [part for part in text.split("/") if part]
+        if not parts:
+            return text
+        body = "/\n".join(parts)
+        return f"/{body}" if is_absolute else body
+    if "\\" in text:
+        parts = [part for part in text.split("\\") if part]
+        if not parts:
+            return text
+        return "\\\n".join(parts)
+    return text
+
+
+def _resolve_display_label(
+    stat: dict[str, Any],
+    source_name_lookup: dict[str, str] | None = None,
+    request_source_ids: dict[str, list[str]] | None = None,
+) -> str:
+    req_type = _req_type(stat)
+    if req_type != "ingest":
+        return _significant_data(stat)
+
+    req_id = str(stat.get("req_id") or stat.get("id") or "").strip()
+    source_ids = (
+        request_source_ids.get(req_id, []) if request_source_ids and req_id else []
+    )
+    if not source_ids:
+        source_ids = _extract_source_ids(stat)
+        if source_ids and request_source_ids is not None and req_id:
+            request_source_ids[req_id] = source_ids
+
+    if source_name_lookup and source_ids:
+        labels = [
+            source_name_lookup.get(source_id, "").strip() for source_id in source_ids
+        ]
+        labels = [label for label in labels if label]
+        if labels:
+            return "\n".join(_multiline_label(label) for label in labels)
+
+    data = stat.get("data")
+    if isinstance(data, dict):
+        source_processed = data.get("source_processed")
+        source_total = data.get("source_total")
+        if source_processed is not None or source_total is not None:
+            processed_text = str(
+                source_processed if source_processed is not None else 0
+            )
+            total_text = str(source_total if source_total is not None else "-")
+            failed_text = data.get("source_failed")
+            if failed_text is not None:
+                return f"sources={processed_text}/{total_text} failed={failed_text}"
+            return f"sources={processed_text}/{total_text}"
+
+    return "ingest"
+
+
+def _build_data_cell(
+    stat: dict[str, Any],
+    source_name_lookup: dict[str, str] | None = None,
+    request_source_ids: dict[str, list[str]] | None = None,
+) -> Group:
     pct = _extract_progress_pct(stat)
     ongoing = _is_ongoing(stat)
-    sig = _significant_data(stat)
-
+    sig = _resolve_display_label(stat, source_name_lookup, request_source_ids)
     if ongoing and pct <= 0:
         bar: ProgressBar = ProgressBar(total=None, pulse=True, width=18)
-        label = f"ongoing {sig}"
     else:
         bar = ProgressBar(total=100, completed=pct, width=18)
-        label = f"{pct:.0f}% {sig}"
-
-    return Group(bar, label)
+    return Group(bar, Text(sig, overflow="fold", no_wrap=False))
 
 
-def _build_stats_table(operation_id: str, stats: list[dict[str, Any]]) -> Table:
+def _build_stats_table(
+    operation_id: str,
+    stats: list[dict[str, Any]],
+    source_name_lookup: dict[str, str] | None = None,
+    request_source_ids: dict[str, list[str]] | None = None,
+) -> Table:
     table = Table(title=f"GulpRequestStats ({operation_id})")
     table.add_column("user_id", overflow="fold")
     table.add_column("ws_id", overflow="fold")
@@ -188,7 +318,7 @@ def _build_stats_table(operation_id: str, stats: list[dict[str, Any]]) -> Table:
     table.add_column("status", overflow="fold")
     table.add_column("req_type", overflow="fold")
     table.add_column("time_updated", overflow="fold")
-    table.add_column("data", overflow="fold")
+    table.add_column("data", overflow="fold", no_wrap=False, ratio=2)
     table.add_column("errors", overflow="fold")
 
     for stat in stats:
@@ -199,7 +329,7 @@ def _build_stats_table(operation_id: str, stats: list[dict[str, Any]]) -> Table:
             str(stat.get("status") or "-"),
             str(stat.get("req_type") or stat.get("task_type") or "-"),
             _human_time(stat.get("time_updated") or stat.get("updated_at")),
-            _build_data_cell(stat),
+            _build_data_cell(stat, source_name_lookup, request_source_ids),
             _errors_preview(stat),
         )
 
@@ -253,35 +383,28 @@ def _first_non_empty(data: dict[str, Any], keys: list[str]) -> str:
     return ""
 
 
-def _significant_data(stat: dict[str, Any]) -> str:
+def _significant_data(
+    stat: dict[str, Any], source_lookup: dict[str, str] | None = None
+) -> str:
     req_type = _req_type(stat)
     data = stat.get("data")
     if not isinstance(data, dict):
         return _data_preview(data)
 
-    # ingest: show only the ingested filename as significant data
     if req_type == "ingest":
-        file_hint = _first_non_empty(
-            data,
-            [
-                "original_file_path",
-                "file_path",
-                "filename",
-                "file",
-                "source_name",
-                "path",
-            ],
-        )
-        if not file_hint:
-            sources = data.get("sources")
-            if isinstance(sources, list) and sources:
-                first = sources[0]
-                if isinstance(first, (list, tuple)) and len(first) >= 2:
-                    file_hint = str(first[1])
-                elif isinstance(first, str):
-                    file_hint = first
+        source_processed = data.get("source_processed")
+        source_total = data.get("source_total")
+        if source_processed is not None or source_total is not None:
+            processed_text = str(
+                source_processed if source_processed is not None else 0
+            )
+            total_text = str(source_total if source_total is not None else "-")
+            failed_text = data.get("source_failed")
+            if failed_text is not None:
+                return f"sources={processed_text}/{total_text} failed={failed_text}"
+            return f"sources={processed_text}/{total_text}"
 
-        return _basename(file_hint) if file_hint else "source"
+        return _data_preview(data)
 
     # raw_ingest: counters remain the most useful compact signal
     if req_type == "raw_ingest":
@@ -329,8 +452,12 @@ def list_stats(
         help="Show only ongoing requests by default.",
     ),
     user_id: str | None = typer.Option(None, "--user-id", help="Filter by user_id."),
-    req_type: str | None = typer.Option(None, "--req-type", help="Filter by request type (e.g. ingest, query, enrich)."),
-    server_id: str | None = typer.Option(None, "--server-id", help="Filter by server_id."),
+    req_type: str | None = typer.Option(
+        None, "--req-type", help="Filter by request type (e.g. ingest, query, enrich)."
+    ),
+    server_id: str | None = typer.Option(
+        None, "--server-id", help="Filter by server_id."
+    ),
     time_created_from: str | None = typer.Option(
         None,
         "--time-created-from",
@@ -390,9 +517,13 @@ def list_stats(
             return False
 
         created_ms = _to_epoch_msec(stat.get("time_created") or stat.get("created_at"))
-        if created_from_ms is not None and (created_ms is None or created_ms < created_from_ms):
+        if created_from_ms is not None and (
+            created_ms is None or created_ms < created_from_ms
+        ):
             return False
-        if created_to_ms is not None and (created_ms is None or created_ms > created_to_ms):
+        if created_to_ms is not None and (
+            created_ms is None or created_ms > created_to_ms
+        ):
             return False
 
         has_errors = len(_extract_errors(stat)) > 0
@@ -413,19 +544,59 @@ def list_stats(
 
     async def _run() -> None:
         async with get_client() as client:
+            request_source_ids: dict[str, list[str]] = {}
+            source_name_lookup: dict[str, str] = {}
             initial = await _fetch_filtered(client)
             if not initial:
                 print_error("No request stats found for the selected filters.")
                 return
 
+            _remember_source_ids(initial, request_source_ids)
+            source_name_lookup.update(
+                await _fetch_source_name_lookup(
+                    client,
+                    [
+                        source_id
+                        for source_ids in request_source_ids.values()
+                        for source_id in source_ids
+                    ],
+                )
+            )
+
             if not live:
-                console.print(_build_stats_table(operation_id, initial))
+                console.print(
+                    _build_stats_table(
+                        operation_id, initial, source_name_lookup, request_source_ids
+                    )
+                )
                 return
 
-            with Live(console=console, refresh_per_second=max(4, int(1 / refresh_seconds) + 1)) as live_view:
+            with Live(
+                console=console, refresh_per_second=max(4, int(1 / refresh_seconds) + 1)
+            ) as live_view:
                 current = initial
                 while True:
-                    live_view.update(_build_stats_table(operation_id, current), refresh=True)
+                    _remember_source_ids(current, request_source_ids)
+                    source_name_lookup.update(
+                        await _fetch_source_name_lookup(
+                            client,
+                            [
+                                source_id
+                                for source_ids in request_source_ids.values()
+                                for source_id in source_ids
+                                if source_id not in source_name_lookup
+                            ],
+                        )
+                    )
+                    live_view.update(
+                        _build_stats_table(
+                            operation_id,
+                            current,
+                            source_name_lookup,
+                            request_source_ids,
+                        ),
+                        refresh=True,
+                    )
                     if not any(_is_ongoing(s) for s in current):
                         break
                     await asyncio.sleep(refresh_seconds)
@@ -454,13 +625,17 @@ def get_stats(
 def delete_bulk(
     operation_id: str,
     flt: str | None = typer.Option(None, "--flt", help="GulpCollabFilter JSON object"),
-    delete_all: bool = typer.Option(False, "--all", help="Delete all request stats in the operation (dangerous)"),
+    delete_all: bool = typer.Option(
+        False, "--all", help="Delete all request stats in the operation (dangerous)"
+    ),
 ) -> None:
     """Delete request stats using the server-side object_delete_bulk API."""
 
     async def _run() -> None:
         if not delete_all and not flt:
-            raise typer.BadParameter("Provide --flt or pass --all to delete all request stats in the operation")
+            raise typer.BadParameter(
+                "Provide --flt or pass --all to delete all request stats in the operation"
+            )
         flt_obj = parse_json_option(flt, field_name="flt") or {}
         async with get_client() as client:
             deleted = await client.plugins.object_delete_bulk(

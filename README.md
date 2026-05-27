@@ -66,7 +66,7 @@ gulp-cli auth whoami
 # List operations
 gulp-cli operation list
 
-# Ingest files with wildcard
+# Ingest files with wildcard (per-file progress is on by default; use --no-show-per-file-progress to hide it)
 gulp-cli ingest file my_operation win_evtx 'samples/win_evtx/*.evtx'
 
 # Query documents

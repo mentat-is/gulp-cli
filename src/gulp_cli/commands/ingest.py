@@ -6,7 +6,7 @@ import os
 import zipfile
 from glob import glob, has_magic
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from gulp_cli.config import get_runtime_verbose
 import typer
@@ -38,6 +38,24 @@ app = typer.Typer(help="Ingestion commands")
 # when --wait is NOT used.  Should be well above the worker task-scheduling lag.
 _WS_CONFIRM_TIMEOUT_SEC = 30.0
 _TERMINAL_STATUSES = {"done", "failed", "canceled"}
+
+
+def _default_ingest_batch_size() -> int:
+    return max(1, (os.cpu_count() or 1) * 2)
+
+
+def _format_per_file_progress_line(item: dict[str, Any]) -> str:
+    req_id = str(item.get("req_id") or "")
+    req_tag = req_id[:8] if req_id else "no-reqid"
+    file_name = Path(str(item.get("file") or "")).name or "<unknown>"
+    status = str(item.get("status") or "unknown")
+    ingested = int(item.get("ingested") or 0)
+    skipped = int(item.get("skipped") or 0)
+    failed = int(item.get("failed") or 0)
+    return (
+        f"[{req_tag}] {file_name}: {status} "
+        f"(ingested={ingested}, skipped={skipped}, failed={failed})"
+    )
 
 
 async def _ensure_operation_exists(
@@ -74,7 +92,7 @@ def _expand_file_patterns(file_patterns: list[str]) -> list[str]:
             seen.add(file_path)
             unique_files.append(file_path)
 
-    return unique_files
+    return sorted(unique_files, key=str.casefold)
 
 
 def _resolve_path(raw_path: str) -> Path:
@@ -526,6 +544,280 @@ async def _wait_for_completion(
     return results
 
 
+class _IngestWsTracker:
+    """Track ingest websocket events with persistent listeners for the whole run."""
+
+    def __init__(
+        self,
+        ws: Any,
+        *,
+        source_done_is_terminal: bool = False,
+        request_status_fetcher: (
+            Callable[[str], Awaitable[dict[str, Any] | None]] | None
+        ) = None,
+    ) -> None:
+        self._ws = ws
+        self._source_done_is_terminal = source_done_is_terminal
+        self._request_status_fetcher = request_status_fetcher
+        self._states: dict[str, dict[str, Any]] = {}
+        self._confirm_events: dict[str, asyncio.Event] = {}
+        self._terminal_events: dict[str, asyncio.Event] = {}
+
+        self._ws.on_message(WSMessageType.INGEST_SOURCE_DONE, self._on_message)
+        self._ws.on_message(WSMessageType.STATS_CREATE, self._on_message)
+        self._ws.on_message(WSMessageType.STATS_UPDATE, self._on_message)
+        self._ws.on_message(WSMessageType.ERROR, self._on_message)
+
+    @classmethod
+    async def create(
+        cls,
+        client: Any,
+        *,
+        source_done_is_terminal: bool = False,
+        request_status_fetcher: (
+            Callable[[str], Awaitable[dict[str, Any] | None]] | None
+        ) = None,
+    ) -> "_IngestWsTracker":
+        ws = await client.ensure_websocket()
+        return cls(
+            ws,
+            source_done_is_terminal=source_done_is_terminal,
+            request_status_fetcher=request_status_fetcher,
+        )
+
+    def close(self) -> None:
+        self._ws.off_message(WSMessageType.INGEST_SOURCE_DONE, self._on_message)
+        self._ws.off_message(WSMessageType.STATS_CREATE, self._on_message)
+        self._ws.off_message(WSMessageType.STATS_UPDATE, self._on_message)
+        self._ws.off_message(WSMessageType.ERROR, self._on_message)
+
+    def _state(self, req_id: str) -> dict[str, Any]:
+        if req_id not in self._states:
+            self._states[req_id] = {
+                "status": "ongoing",
+                "ingested": 0,
+                "skipped": 0,
+                "failed": 0,
+                "stats": {},
+                "seen_confirm": False,
+            }
+        return self._states[req_id]
+
+    @staticmethod
+    def _extract_payload_obj(msg: WSMessage) -> dict[str, Any]:
+        if not isinstance(msg.data, dict):
+            return {}
+        obj = msg.data.get("obj")
+        if isinstance(obj, dict):
+            return obj
+        return msg.data
+
+    @staticmethod
+    def _to_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    @classmethod
+    def _extract_ingest_counters(
+        cls, payload: dict[str, Any]
+    ) -> tuple[int, int, int, bool]:
+        nested = payload.get("data")
+        nested_data = nested if isinstance(nested, dict) else {}
+        has_top = any(
+            key in payload
+            for key in ("records_ingested", "records_skipped", "records_failed")
+        )
+        has_nested = any(
+            key in nested_data
+            for key in ("records_ingested", "records_skipped", "records_failed")
+        )
+        ingested = cls._to_int(payload.get("records_ingested"))
+        skipped = cls._to_int(payload.get("records_skipped"))
+        failed = cls._to_int(payload.get("records_failed"))
+        ingested = max(ingested, cls._to_int(nested_data.get("records_ingested")))
+        skipped = max(skipped, cls._to_int(nested_data.get("records_skipped")))
+        failed = max(failed, cls._to_int(nested_data.get("records_failed")))
+        return ingested, skipped, failed, (has_top or has_nested)
+
+    def _on_message(self, msg: WSMessage) -> None:
+        req_id = msg.req_id
+        if not req_id:
+            return
+
+        state = self._state(req_id)
+        obj = self._extract_payload_obj(msg)
+
+        if msg.type == WSMessageType.INGEST_SOURCE_DONE.value:
+            done_ingested, done_skipped, done_failed, _ = self._extract_ingest_counters(
+                obj
+            )
+            state["ingested"] += done_ingested
+            state["skipped"] += done_skipped
+            state["failed"] += done_failed
+            if (
+                self._source_done_is_terminal
+                and state.get("status") not in _TERMINAL_STATUSES
+            ):
+                state["status"] = "done"
+                state["seen_confirm"] = True
+
+                confirm_ev = self._confirm_events.get(req_id)
+                if confirm_ev is not None:
+                    confirm_ev.set()
+
+                terminal_ev = self._terminal_events.get(req_id)
+                if terminal_ev is not None:
+                    terminal_ev.set()
+            return
+
+        if msg.type in (
+            WSMessageType.STATS_CREATE.value,
+            WSMessageType.STATS_UPDATE.value,
+        ):
+            state["seen_confirm"] = True
+            state["stats"] = obj
+            status = str(obj.get("status", state["status"]))
+            stats_ingested, stats_skipped, stats_failed, has_stats_counters = (
+                self._extract_ingest_counters(obj)
+            )
+            if has_stats_counters:
+                state["ingested"] = stats_ingested
+                state["skipped"] = stats_skipped
+                state["failed"] = stats_failed
+            state["status"] = status
+
+            confirm_ev = self._confirm_events.get(req_id)
+            if confirm_ev is not None:
+                confirm_ev.set()
+
+            if status in _TERMINAL_STATUSES:
+                terminal_ev = self._terminal_events.get(req_id)
+                if terminal_ev is not None:
+                    terminal_ev.set()
+            return
+
+        if msg.type == WSMessageType.ERROR.value:
+            state["status"] = "failed"
+            state["stats"] = obj
+            terminal_ev = self._terminal_events.get(req_id)
+            if terminal_ev is not None:
+                terminal_ev.set()
+
+    async def wait_for_confirm(self, req_id: str, timeout: float) -> bool:
+        """Return True if timed out waiting for STATS_CREATE/UPDATE for req_id."""
+        if not req_id:
+            return False
+
+        state = self._state(req_id)
+        if state.get("seen_confirm"):
+            return False
+
+        ev = self._confirm_events.get(req_id)
+        if ev is None:
+            ev = asyncio.Event()
+            self._confirm_events[req_id] = ev
+
+        if timeout == 0:
+            await ev.wait()
+            return False
+
+        try:
+            await asyncio.wait_for(ev.wait(), timeout=timeout)
+            return False
+        except asyncio.TimeoutError:
+            return True
+
+    async def wait_for_terminal(
+        self,
+        file_path: str,
+        req_id: str,
+        timeout: int,
+    ) -> dict[str, Any]:
+        if not req_id:
+            return {
+                "file": file_path,
+                "req_id": req_id,
+                "status": "unknown",
+                "ingested": 0,
+                "skipped": 0,
+                "failed": 0,
+                "result": {},
+                "timed_out": False,
+            }
+
+        state = self._state(req_id)
+        timed_out = False
+
+        if state.get("status") not in _TERMINAL_STATUSES:
+            ev = self._terminal_events.get(req_id)
+            if ev is None:
+                ev = asyncio.Event()
+                self._terminal_events[req_id] = ev
+
+            deadline = (
+                None if timeout == 0 else asyncio.get_running_loop().time() + timeout
+            )
+            while state.get("status") not in _TERMINAL_STATUSES:
+                remaining = (
+                    None
+                    if deadline is None
+                    else max(0.0, deadline - asyncio.get_running_loop().time())
+                )
+                if remaining is not None and remaining == 0.0:
+                    timed_out = True
+                    state["status"] = "timeout"
+                    break
+
+                wait_slice = 10.0 if remaining is None else min(10.0, remaining)
+                try:
+                    await asyncio.wait_for(ev.wait(), timeout=wait_slice)
+                    break
+                except asyncio.TimeoutError:
+                    # Fallback: poll current request status in case websocket terminal
+                    # notifications are delayed or missed under high load.
+                    if self._request_status_fetcher is not None:
+                        try:
+                            data = await self._request_status_fetcher(req_id)
+                        except Exception:
+                            data = None
+
+                        if isinstance(data, dict):
+                            polled_status = str(data.get("status", state["status"]))
+                            state["stats"] = data
+                            state["status"] = polled_status
+
+                            ing = data.get("records_ingested")
+                            skp = data.get("records_skipped")
+                            fld = data.get("records_failed")
+                            if ing is not None:
+                                state["ingested"] = self._to_int(ing)
+                            if skp is not None:
+                                state["skipped"] = self._to_int(skp)
+                            if fld is not None:
+                                state["failed"] = self._to_int(fld)
+
+                            if polled_status in _TERMINAL_STATUSES:
+                                state["seen_confirm"] = True
+                                confirm_ev = self._confirm_events.get(req_id)
+                                if confirm_ev is not None:
+                                    confirm_ev.set()
+                                ev.set()
+                                break
+
+        return {
+            "file": file_path,
+            "req_id": req_id,
+            "status": state.get("status", "unknown"),
+            "ingested": state.get("ingested", 0),
+            "skipped": state.get("skipped", 0),
+            "failed": state.get("failed", 0),
+            "result": state.get("stats", {}),
+            "timed_out": timed_out,
+        }
+
+
 @app.command("file")
 def ingest_file(
     operation_id: str,
@@ -568,11 +860,16 @@ def ingest_file(
     wait_timeout: int = typer.Option(
         300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
     ),
+    show_per_file_progress: bool = typer.Option(
+        True,
+        "--show-per-file-progress/--no-show-per-file-progress",
+        help="In --wait mode, print one line for each completed file request.",
+    ),
     batch_size: int = typer.Option(
-        8,
+        _default_ingest_batch_size(),
         "--batch-size",
         min=1,
-        help="Number of file ingestion requests to submit concurrently per batch.",
+        help="Number of file ingestion requests to submit concurrently per batch (default: cores*2).",
     ),
 ) -> None:
     """Ingest one or more files (supports glob patterns).
@@ -607,6 +904,22 @@ def ingest_file(
             # Establish WS BEFORE any ingest call so ws_id is live when the
             # worker tries to publish its first STATS_CREATE event.
             await client.ensure_websocket()
+
+            async def _fetch_request_status(req_id: str) -> dict[str, Any] | None:
+                try:
+                    resp = await client._request(
+                        "GET", "/request_get_by_id", params={"obj_id": req_id}
+                    )
+                except Exception:
+                    return None
+                data = resp.get("data")
+                return data if isinstance(data, dict) else None
+
+            tracker = await _IngestWsTracker.create(
+                client,
+                source_done_is_terminal=True,
+                request_status_fetcher=_fetch_request_status,
+            )
 
             params = {
                 "plugin_params": parse_json_option(
@@ -668,42 +981,145 @@ def ingest_file(
                 req_id = str(submission.get("req_id") or "")
                 return file_path, req_id, submission
 
-            # Fire requests in bounded batches; each batch is acknowledged (and,
-            # with --wait, completed) before submitting the next one.
+            # Sliding window dispatcher: keep up to batch_size requests in flight.
             file_req_map: dict[str, str] = {}
             fired_meta: dict[str, dict[str, Any]] = {}
-            all_timed_out: list[str] = []
-            completed_results: list[dict[str, Any]] = []
+            timed_out_req_ids: set[str] = set()
+            completed_by_file: dict[str, dict[str, Any]] = {}
+            file_iter = iter(unique_files)
+            in_flight: set[
+                asyncio.Task[
+                    tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]
+                ]
+            ] = set()
 
-            for batch_start in range(0, len(unique_files), batch_size):
-                batch_paths = unique_files[batch_start : batch_start + batch_size]
-                fired_batch: list[tuple[str, str, dict[str, Any]]] = (
-                    await asyncio.gather(*[_fire_one(path) for path in batch_paths])
-                )
-
-                batch_map: dict[str, str] = {
-                    file_path: req_id for file_path, req_id, _ in fired_batch
-                }
-                file_req_map.update(batch_map)
-                fired_meta.update(
-                    {req_id: payload for _, req_id, payload in fired_batch if req_id}
-                )
-
+            async def _submit_and_gate(
+                file_path: str,
+            ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]:
+                fpath, req_id, submission = await _fire_one(file_path)
                 if wait:
-                    # --wait: block this batch until terminal statuses.
-                    completed_results.extend(
-                        await _wait_for_completion(client, batch_map, wait_timeout)
+                    waited = await tracker.wait_for_terminal(
+                        fpath, req_id, wait_timeout
                     )
-                else:
-                    # Default: block this batch until backend confirms request registration.
-                    all_timed_out.extend(
-                        await _wait_for_stats_create(client, list(batch_map.values()))
+                    return fpath, req_id, submission, waited, False
+
+                timed_out = await tracker.wait_for_confirm(
+                    req_id, _WS_CONFIRM_TIMEOUT_SEC
+                )
+                return fpath, req_id, submission, None, timed_out
+
+            def _schedule_next() -> bool:
+                try:
+                    next_file = next(file_iter)
+                except StopIteration:
+                    return False
+
+                in_flight.add(asyncio.create_task(_submit_and_gate(next_file)))
+                return True
+
+            try:
+                progress = None
+                progress_task_id = None
+                completed_count = 0
+                if wait:
+                    progress = Progress(
+                        SpinnerColumn(),
+                        TextColumn("[bold blue]{task.description}"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        TimeElapsedColumn(),
+                        console=console,
+                        transient=True,
                     )
+                    progress.__enter__()
+                    progress_task_id = progress.add_task(
+                        "ingesting files", total=len(unique_files)
+                    )
+
+                for _ in range(min(batch_size, len(unique_files))):
+                    _schedule_next()
+
+                while in_flight:
+                    done, pending = await asyncio.wait(
+                        in_flight, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    in_flight = pending
+
+                    for done_task in done:
+                        file_path, req_id, submission, waited, timed_out = (
+                            await done_task
+                        )
+                        file_req_map[file_path] = req_id
+                        if req_id:
+                            fired_meta[req_id] = submission
+                        if timed_out and req_id:
+                            timed_out_req_ids.add(req_id)
+                        if waited is not None:
+                            completed_by_file[file_path] = waited
+                            completed_count += 1
+                            if show_per_file_progress:
+                                console.print(_format_per_file_progress_line(waited))
+                            if progress is not None and progress_task_id is not None:
+                                progress.update(
+                                    progress_task_id,
+                                    advance=1,
+                                    description=(
+                                        f"ingesting files (done={completed_count}/{len(unique_files)}, "
+                                        f"running={len(in_flight)})"
+                                    ),
+                                )
+
+                        _schedule_next()
+            finally:
+                if wait and progress is not None:
+                    progress.__exit__(None, None, None)
+                tracker.close()
 
             if wait:
-                results = completed_results
+                results = [
+                    completed_by_file.get(
+                        fp,
+                        {
+                            "file": fp,
+                            "req_id": file_req_map.get(fp, ""),
+                            "status": "unknown",
+                            "ingested": 0,
+                            "skipped": 0,
+                            "failed": 0,
+                            "result": {},
+                            "timed_out": False,
+                        },
+                    )
+                    for fp in unique_files
+                ]
+                if not get_runtime_verbose():
+                    results = [
+                        {
+                            "file": item.get("file"),
+                            "req_id": item.get("req_id"),
+                            "status": item.get("status", "unknown"),
+                            "ingested": item.get("ingested", 0),
+                            "skipped": item.get("skipped", 0),
+                            "failed": item.get("failed", 0),
+                        }
+                        for item in results
+                    ]
+                else:
+                    results = [
+                        {
+                            "file": item.get("file"),
+                            "req_id": item.get("req_id"),
+                            "status": item.get("status", "unknown"),
+                            "ingested": item.get("ingested", 0),
+                            "skipped": item.get("skipped", 0),
+                            "failed": item.get("failed", 0),
+                            "result": item.get("result", {}),
+                            "ws_only": True,
+                        }
+                        for item in results
+                    ]
             else:
-                timed_out_set = set(all_timed_out)
+                timed_out_set = set(timed_out_req_ids)
                 if timed_out_set and not get_runtime_verbose():
                     print_warning(
                         f"{len(timed_out_set)} request(s) did not receive STATS_CREATE "
@@ -758,11 +1174,16 @@ def ingest_file_to_source(
     wait_timeout: int = typer.Option(
         300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
     ),
+    show_per_file_progress: bool = typer.Option(
+        True,
+        "--show-per-file-progress/--no-show-per-file-progress",
+        help="In --wait mode, print one line for each completed file request.",
+    ),
     batch_size: int = typer.Option(
-        8,
+        _default_ingest_batch_size(),
         "--batch-size",
         min=1,
-        help="Number of file ingestion requests to submit concurrently per batch.",
+        help="Number of file ingestion requests to submit concurrently per batch (default: cores*2).",
     ),
 ) -> None:
     """Ingest one or more files into an existing source."""
@@ -775,6 +1196,22 @@ def ingest_file_to_source(
     async def _run() -> None:
         async with get_client() as client:
             await client.ensure_websocket()
+
+            async def _fetch_request_status(req_id: str) -> dict[str, Any] | None:
+                try:
+                    resp = await client._request(
+                        "GET", "/request_get_by_id", params={"obj_id": req_id}
+                    )
+                except Exception:
+                    return None
+                data = resp.get("data")
+                return data if isinstance(data, dict) else None
+
+            tracker = await _IngestWsTracker.create(
+                client,
+                source_done_is_terminal=True,
+                request_status_fetcher=_fetch_request_status,
+            )
 
             params = {
                 "plugin_params": parse_json_option(
@@ -801,36 +1238,142 @@ def ingest_file_to_source(
 
             file_req_map: dict[str, str] = {}
             fired_meta: dict[str, dict[str, Any]] = {}
-            all_timed_out: list[str] = []
-            completed_results: list[dict[str, Any]] = []
+            timed_out_req_ids: set[str] = set()
+            completed_by_file: dict[str, dict[str, Any]] = {}
+            file_iter = iter(unique_files)
+            in_flight: set[
+                asyncio.Task[
+                    tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]
+                ]
+            ] = set()
 
-            for batch_start in range(0, len(unique_files), batch_size):
-                batch_paths = unique_files[batch_start : batch_start + batch_size]
-                fired_batch: list[tuple[str, str, dict[str, Any]]] = (
-                    await asyncio.gather(*[_fire_one(path) for path in batch_paths])
-                )
-
-                batch_map: dict[str, str] = {
-                    file_path: req_id for file_path, req_id, _ in fired_batch
-                }
-                file_req_map.update(batch_map)
-                fired_meta.update(
-                    {req_id: payload for _, req_id, payload in fired_batch if req_id}
-                )
-
+            async def _submit_and_gate(
+                file_path: str,
+            ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]:
+                fpath, req_id, submission = await _fire_one(file_path)
                 if wait:
-                    completed_results.extend(
-                        await _wait_for_completion(client, batch_map, wait_timeout)
+                    waited = await tracker.wait_for_terminal(
+                        fpath, req_id, wait_timeout
                     )
-                else:
-                    all_timed_out.extend(
-                        await _wait_for_stats_create(client, list(batch_map.values()))
+                    return fpath, req_id, submission, waited, False
+
+                timed_out = await tracker.wait_for_confirm(
+                    req_id, _WS_CONFIRM_TIMEOUT_SEC
+                )
+                return fpath, req_id, submission, None, timed_out
+
+            def _schedule_next() -> bool:
+                try:
+                    next_file = next(file_iter)
+                except StopIteration:
+                    return False
+
+                in_flight.add(asyncio.create_task(_submit_and_gate(next_file)))
+                return True
+
+            try:
+                progress = None
+                progress_task_id = None
+                completed_count = 0
+                if wait:
+                    progress = Progress(
+                        SpinnerColumn(),
+                        TextColumn("[bold blue]{task.description}"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        TimeElapsedColumn(),
+                        console=console,
+                        transient=True,
                     )
+                    progress.__enter__()
+                    progress_task_id = progress.add_task(
+                        "ingesting files", total=len(unique_files)
+                    )
+
+                for _ in range(min(batch_size, len(unique_files))):
+                    _schedule_next()
+
+                while in_flight:
+                    done, pending = await asyncio.wait(
+                        in_flight, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    in_flight = pending
+
+                    for done_task in done:
+                        file_path, req_id, submission, waited, timed_out = (
+                            await done_task
+                        )
+                        file_req_map[file_path] = req_id
+                        if req_id:
+                            fired_meta[req_id] = submission
+                        if timed_out and req_id:
+                            timed_out_req_ids.add(req_id)
+                        if waited is not None:
+                            completed_by_file[file_path] = waited
+                            completed_count += 1
+                            if show_per_file_progress:
+                                console.print(_format_per_file_progress_line(waited))
+                            if progress is not None and progress_task_id is not None:
+                                progress.update(
+                                    progress_task_id,
+                                    advance=1,
+                                    description=(
+                                        f"ingesting files (done={completed_count}/{len(unique_files)}, "
+                                        f"running={len(in_flight)})"
+                                    ),
+                                )
+
+                        _schedule_next()
+            finally:
+                if wait and progress is not None:
+                    progress.__exit__(None, None, None)
+                tracker.close()
 
             if wait:
-                results = completed_results
+                results = [
+                    completed_by_file.get(
+                        fp,
+                        {
+                            "file": fp,
+                            "req_id": file_req_map.get(fp, ""),
+                            "status": "unknown",
+                            "ingested": 0,
+                            "skipped": 0,
+                            "failed": 0,
+                            "result": {},
+                            "timed_out": False,
+                        },
+                    )
+                    for fp in unique_files
+                ]
+                if not get_runtime_verbose():
+                    results = [
+                        {
+                            "file": item.get("file"),
+                            "req_id": item.get("req_id"),
+                            "status": item.get("status", "unknown"),
+                            "ingested": item.get("ingested", 0),
+                            "skipped": item.get("skipped", 0),
+                            "failed": item.get("failed", 0),
+                        }
+                        for item in results
+                    ]
+                else:
+                    results = [
+                        {
+                            "file": item.get("file"),
+                            "req_id": item.get("req_id"),
+                            "status": item.get("status", "unknown"),
+                            "ingested": item.get("ingested", 0),
+                            "skipped": item.get("skipped", 0),
+                            "failed": item.get("failed", 0),
+                            "result": item.get("result", {}),
+                            "ws_only": True,
+                        }
+                        for item in results
+                    ]
             else:
-                timed_out_set = set(all_timed_out)
+                timed_out_set = set(timed_out_req_ids)
                 if timed_out_set and not get_runtime_verbose():
                     print_warning(
                         f"{len(timed_out_set)} request(s) did not receive STATS_CREATE "
