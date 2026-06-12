@@ -45,6 +45,7 @@
     - [Run Rule on Specific Source](#run-rule-on-specific-source)
     - [Multiple Sigma Rules in Batch](#multiple-sigma-rules-in-batch)
   - [Enrichment \& Tagging Workflows](#enrichment--tagging-workflows)
+    - [use whois to enrich IP addresses with domain information](#use-whois-to-enrich-ip-addresses-with-domain-information)
     - [Tag Suspicious Events](#tag-suspicious-events)
     - [Apply Threat Level Classification](#apply-threat-level-classification)
     - [Track Analysis Progress](#track-analysis-progress)
@@ -612,6 +613,16 @@ done
 ---
 
 ## Enrichment & Tagging Workflows
+
+### use whois to enrich IP addresses with domain information
+
+```bash
+gulp-cli enrich documents incident-001 \
+  --plugin enrich_whois \
+  --flt '{"operation_ids":["network"]}' \
+  --fields '{"ip.destination": null}' \
+  --wait
+```
 
 ### Tag Suspicious Events
 
