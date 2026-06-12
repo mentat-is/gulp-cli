@@ -1298,6 +1298,7 @@ gulp-cli enrich documents OPERATION_ID [OPTIONS]
 - `--plugin-params TEXT` — Plugin parameters JSON
 - `--flt TEXT` — Filter JSON
 - `--wait` — Wait for completion
+- `--fields TEXT` — { "field": "value" } pairs to set on enriched documents (JSON string): if "value" is `null` the enrichment is made on field's value in the document. either, enriched "value" is used.
 
 **Examples:**
 
@@ -1305,7 +1306,8 @@ gulp-cli enrich documents OPERATION_ID [OPTIONS]
 gulp-cli enrich documents my_op \
   --plugin my_enricher \
   --plugin-params '{"api_key":"..."}'  \
-  --flt '{"enriched":false}'
+  --flt '{"operation_ids":["my_op"],"source_ids":["security"]}' \
+  --fields '{"ip.destination": null}'
 ```
 
 ---
@@ -1327,12 +1329,13 @@ gulp-cli enrich single-id OPERATION_ID DOCUMENT_ID [OPTIONS]
 
 - `--plugin TEXT` — Plugin name (required)
 - `--plugin-params TEXT` — Plugin parameters JSON
+- `--fields TEXT` — { "field": "value" } pairs to set on enriched documents (JSON string): if "value" is `null` the enrichment is made on field's value in the document. either, enriched "value" is used.
 - `--wait` — Wait for completion
 
 **Examples:**
 
 ```bash
-gulp-cli enrich single-id my_op doc123 --plugin my_enricher
+gulp-cli enrich single-id my_op doc123 --plugin my_enricher --fields '{"host.os": null}' --wait
 ```
 
 ---
