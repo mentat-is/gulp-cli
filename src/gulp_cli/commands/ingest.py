@@ -948,7 +948,10 @@ def ingest_file(
                 return
 
             if reset_operation:
-                await client.operations.delete(operation_id, force=True)
+                try:
+                    await client.operations.delete(operation_id, force=True)
+                except NotFoundError:
+                    pass
                 op = await client.operations.create(name=operation_id)
                 if not get_runtime_verbose():
                     print_warning(

@@ -7,6 +7,7 @@ from gulp_cli.commands.auth import app as auth_app
 from gulp_cli.commands.collab import app as collab_app
 from gulp_cli.commands.context import app as context_app
 from gulp_cli.commands.db import app as db_app
+from gulp_cli.commands.enrich import app as enrich_app
 from gulp_cli.commands.enhance_map import app as enhance_map_app
 from gulp_cli.commands.glyph import app as glyph_app
 from gulp_cli.commands.ingest import app as ingest_app
@@ -93,6 +94,7 @@ app.add_typer(stats_app, name="stats")
 app.add_typer(storage_app, name="storage")
 app.add_typer(collab_app, name="collab")
 app.add_typer(db_app, name="db")
+app.add_typer(enrich_app, name="enrich")
 app.add_typer(acl_app, name="acl")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(mapping_app, name="mapping")
@@ -114,6 +116,7 @@ load_extensions(
         "storage": storage_app,
         "collab": collab_app,
         "db": db_app,
+        "enrich": enrich_app,
         "acl": acl_app,
         "plugin": plugin_app,
         "mapping": mapping_app,
