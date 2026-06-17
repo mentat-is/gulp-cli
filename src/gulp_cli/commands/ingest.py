@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
+import shutil
+import tempfile
 import zipfile
 from glob import glob, has_magic
 from pathlib import Path
@@ -38,6 +41,7 @@ app = typer.Typer(help="Ingestion commands")
 # when --wait is NOT used.  Should be well above the worker task-scheduling lag.
 _WS_CONFIRM_TIMEOUT_SEC = 30.0
 _TERMINAL_STATUSES = {"done", "failed", "canceled"}
+_MAX_ZIP_PART_SIZE_BYTES = 4 * 1024**3 - 1
 
 
 def _default_ingest_batch_size() -> int:
@@ -105,27 +109,64 @@ def _expand_path_expression(raw_path: str) -> str:
     return os.path.expandvars(os.path.expanduser(raw_path.strip()))
 
 
+def _parse_zip_split_size(size_spec: str | int | None) -> int | None:
+    if size_spec is None:
+        return None
+    if isinstance(size_spec, int):
+        return max(0, size_spec)
+
+    text = str(size_spec).strip()
+    if not text:
+        return None
+
+    match = re.fullmatch(r"(?i)(\d+)(b|kb|mb|gb)?", text)
+    if match is None:
+        raise typer.BadParameter(
+            "Invalid split size. Use a plain number of bytes or a suffix like mb/gb."
+        )
+
+    value = int(match.group(1))
+    suffix = (match.group(2) or "b").lower()
+    multipliers = {"b": 1, "kb": 1024, "mb": 1024**2, "gb": 1024**3}
+    return max(0, value * multipliers[suffix])
+
+
+def _format_zip_split_size_spec(size_bytes: int) -> str:
+    if size_bytes >= 1024**3 and size_bytes % (1024**3) == 0:
+        return f"{size_bytes // (1024**3)}g"
+    if size_bytes >= 1024**2 and size_bytes % (1024**2) == 0:
+        return f"{size_bytes // (1024**2)}m"
+    if size_bytes >= 1024 and size_bytes % 1024 == 0:
+        return f"{size_bytes // 1024}k"
+    return str(size_bytes)
+
+
 def _expand_zip_source_patterns(
     path_patterns: list[str],
     paths_file: str | None,
 ) -> list[tuple[Path, Path]]:
-    if path_patterns and paths_file is not None:
-        raise typer.BadParameter(
-            "Provide paths either as arguments or via --paths-file, not both"
-        )
     if not path_patterns and paths_file is None:
         raise typer.BadParameter("Provide at least one path argument or --paths-file")
 
-    raw_entries = list(path_patterns)
     if paths_file is not None:
         file_path = _resolve_path(paths_file)
         if not file_path.is_file():
             raise typer.BadParameter(f"Paths file not found: {file_path}")
-        raw_entries.extend(
+        console.print(f"[cyan]Reading path list[/] {file_path}")
+        if path_patterns:
+            console.print(
+                "[yellow]Ignoring positional path patterns[/] because --paths-file is set"
+            )
+        raw_entries = [
             line.strip()
             for line in file_path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")
+        ]
+        console.print(
+            f"[cyan]Loaded[/] {len(raw_entries)} path expression(s) from {file_path}"
         )
+    else:
+        raw_entries = list(path_patterns)
 
     expanded_paths: list[tuple[Path, Path]] = []
     seen: set[tuple[Path, Path]] = set()
@@ -184,71 +225,300 @@ def _resolve_glob_base(pattern_path: Path) -> Path:
 
 
 def _build_zip_from_sources(
-    output_zip: Path, sources: list[tuple[Path, Path]]
-) -> tuple[int, list[str]]:
+    output_zip: Path,
+    sources: list[tuple[Path, Path]],
+    *,
+    preserve_path: bool = False,
+    split_size_bytes: int | None = None,
+) -> tuple[int, list[str], list[Path]]:
     output_zip.parent.mkdir(parents=True, exist_ok=True)
 
     archived_entries: list[str] = []
     archived_count = 0
     seen_archive_entries: set[str] = set()
     seen_source_files: set[Path] = set()
+    created_archives: list[Path] = []
+    total_entries = 0
+    entries_added = 0
 
-    def _record_directory(archive_name_str: str, archive: zipfile.ZipFile) -> None:
-        entry_name = f"{archive_name_str}/"
-        if entry_name in seen_archive_entries:
+    def _archive_name_for_path(source_path: Path, base_dir: Path) -> str:
+        if preserve_path:
+            try:
+                rel_path = os.path.relpath(source_path, Path.cwd())
+            except ValueError:
+                rel_path = source_path.name
+            return Path(rel_path).as_posix()
+        try:
+            rel_path = source_path.relative_to(base_dir)
+        except ValueError:
+            rel_path = source_path.name
+        return rel_path.as_posix()
+
+    planned_entries: list[tuple[Path, Path, str]] = []
+    for source_path, base_dir in sources:
+        try:
+            console.print(f"[cyan]Scanning[/] {source_path}")
+            if not source_path.exists():
+                raise FileNotFoundError(source_path)
+
+            if source_path.is_file():
+                planned_entries.append(
+                    (
+                        source_path,
+                        base_dir,
+                        _archive_name_for_path(source_path, base_dir),
+                    )
+                )
+                continue
+
+            child_paths = sorted(source_path.rglob("*"))
+            if not child_paths:
+                planned_entries.append(
+                    (
+                        source_path,
+                        base_dir,
+                        _archive_name_for_path(source_path, base_dir),
+                    )
+                )
+                continue
+
+            for current_path in child_paths:
+                try:
+                    planned_entries.append(
+                        (
+                            current_path,
+                            base_dir,
+                            _archive_name_for_path(current_path, base_dir),
+                        )
+                    )
+                except Exception as exc:
+                    print_error(
+                        f"Skipping {current_path} while creating ZIP {output_zip}: {exc}"
+                    )
+        except Exception as exc:
+            print_error(
+                f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
+            )
+
+    entries_to_archive: list[tuple[Path, str]] = []
+    planned_archive_entries: set[str] = set()
+    planned_source_files: set[Path] = set()
+    for source_path, _base_dir, archive_name_str in planned_entries:
+        if archive_name_str in planned_archive_entries:
+            continue
+        if source_path.is_file() and source_path in planned_source_files:
+            continue
+        planned_archive_entries.add(archive_name_str)
+        if source_path.is_file():
+            planned_source_files.add(source_path)
+        entries_to_archive.append((source_path, archive_name_str))
+    total_entries = len(entries_to_archive)
+
+    if split_size_bytes is not None and split_size_bytes > _MAX_ZIP_PART_SIZE_BYTES:
+        raise typer.BadParameter(
+            "Split size must be at most 4gb so temporary ZIP files stay FAT32-safe"
+        )
+
+    def _write_archive(
+        archive_path: Path,
+        entries_to_store: list[tuple[Path, str]],
+        *,
+        log_entries: bool = False,
+    ) -> None:
+        nonlocal entries_added
+        with zipfile.ZipFile(
+            archive_path,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as archive:
+            for source_path, archive_name_str in entries_to_store:
+                try:
+                    if source_path.is_dir():
+                        archive.writestr(f"{archive_name_str}/", "")
+                        info = archive.getinfo(f"{archive_name_str}/")
+                    else:
+                        archive.write(source_path, arcname=archive_name_str)
+                        info = archive.getinfo(archive_name_str)
+                    if log_entries and total_entries:
+                        entries_added += 1
+                        percent = int((entries_added / total_entries) * 100)
+                        console.print(
+                            "[cyan]Added ZIP entry[/] "
+                            f"{info.filename} "
+                            f"({info.file_size} bytes -> {info.compress_size} bytes, "
+                            f"{entries_added}/{total_entries}, {percent}%)"
+                        )
+                except Exception as exc:
+                    print_error(
+                        f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
+                    )
+
+    def _record_entry(source_path: Path, archive_name_str: str) -> None:
+        nonlocal archived_count
+        entry_name = f"{archive_name_str}/" if source_path.is_dir() else archive_name_str
+        if entry_name in seen_archive_entries or source_path in seen_source_files:
             return
-        archive.writestr(entry_name, "")
         seen_archive_entries.add(entry_name)
         archived_entries.append(entry_name)
-
-    def _record_file(
-        source_path: Path, archive_name_str: str, archive: zipfile.ZipFile
-    ) -> None:
-        nonlocal archived_count
-        if archive_name_str in seen_archive_entries or source_path in seen_source_files:
+        if source_path.is_dir():
             return
-        archive.write(source_path, arcname=archive_name_str)
-        seen_archive_entries.add(archive_name_str)
         seen_source_files.add(source_path)
-        archived_entries.append(archive_name_str)
         archived_count += 1
 
-    with zipfile.ZipFile(
-        output_zip, mode="w", compression=zipfile.ZIP_DEFLATED
-    ) as archive:
-        for source_path, base_dir in sources:
-            try:
-                archive_root = source_path.relative_to(base_dir)
+    def _publish_archive(temp_path: Path, final_path: Path) -> None:
+        if final_path.exists():
+            final_path.unlink()
+        shutil.move(str(temp_path), str(final_path))
+        console.print(
+            f"[green]Wrote[/] {final_path} ({final_path.stat().st_size} bytes)"
+        )
 
-                if not source_path.exists():
-                    raise FileNotFoundError(source_path)
+    class _SplitZipWriter:
+        def __init__(
+            self,
+            volume_base: Path,
+            split_size: int,
+            on_volume_open: Callable[[Path, int, int], None],
+        ) -> None:
+            self._volume_base = volume_base
+            self._split_size = split_size
+            self._on_volume_open = on_volume_open
+            self._volume_index = 0
+            self._volume_size = 0
+            self._position = 0
+            self._handle: Any = None
+            self.volumes: list[Path] = []
 
-                if source_path.is_file():
-                    _record_file(source_path, archive_root.as_posix(), archive)
-                    continue
+        def writable(self) -> bool:
+            return True
 
-                child_paths = sorted(source_path.rglob("*"))
-                if not child_paths:
-                    _record_directory(archive_root.as_posix(), archive)
-                    continue
+        def seekable(self) -> bool:
+            return False
 
-                for current_path in child_paths:
-                    try:
-                        archive_name_str = current_path.relative_to(base_dir).as_posix()
-                        if current_path.is_dir():
-                            _record_directory(archive_name_str, archive)
-                            continue
-                        _record_file(current_path, archive_name_str, archive)
-                    except Exception as exc:
-                        print_error(
-                            f"Skipping {current_path} while creating ZIP {output_zip}: {exc}"
-                        )
-            except Exception as exc:
-                print_error(
-                    f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
-                )
+        def tell(self) -> int:
+            return self._position
 
-    return archived_count, archived_entries
+        def seek(self, _offset: int, _whence: int = 0) -> int:
+            raise OSError("split ZIP writer is not seekable")
+
+        def write(self, data: bytes) -> int:
+            data_view = memoryview(data)
+            written = 0
+            while written < len(data_view):
+                if self._handle is None or self._volume_size >= self._split_size:
+                    self._open_next_volume()
+                remaining = self._split_size - self._volume_size
+                chunk = data_view[written : written + remaining]
+                self._handle.write(chunk)
+                chunk_size = len(chunk)
+                self._volume_size += chunk_size
+                self._position += chunk_size
+                written += chunk_size
+            return written
+
+        def flush(self) -> None:
+            if self._handle is not None:
+                self._handle.flush()
+
+        def close(self) -> None:
+            if self._handle is not None:
+                self._handle.close()
+                self._handle = None
+
+        def _open_next_volume(self) -> None:
+            self.close()
+            self._volume_index += 1
+            self._volume_size = 0
+            volume_path = self._volume_base.with_name(
+                f"{self._volume_base.name}.{self._volume_index:03d}"
+            )
+            self._handle = volume_path.open("wb")
+            self.volumes.append(volume_path)
+            self._on_volume_open(volume_path, self._volume_index, self._position)
+
+    def _write_multipart_archive(temp_dir: Path) -> list[Path]:
+        temp_archive_base = temp_dir / output_zip.name
+        console.print(
+            "[yellow]Creating multipart ZIP volumes; extract with 7z or another "
+            "split-ZIP compatible tool.[/]"
+        )
+
+        def _print_volume_start(
+            volume_path: Path,
+            volume_index: int,
+            byte_offset: int,
+        ) -> None:
+            console.print(
+                "[cyan]Starting split volume[/] "
+                f"{volume_path.name} ({volume_index}, offset={byte_offset} bytes)"
+            )
+
+        writer = _SplitZipWriter(
+            temp_archive_base,
+            split_size_bytes or 1,
+            _print_volume_start,
+        )
+        try:
+            _write_archive(
+                writer,
+                [
+                    (source_path, archive_name_str)
+                    for source_path, archive_name_str in entries_to_archive
+                ],
+                log_entries=True,
+            )
+        finally:
+            writer.close()
+
+        if not writer.volumes:
+            raise RuntimeError("multipart ZIP writer did not create any volumes")
+
+        for source_path, archive_name_str in entries_to_archive:
+            _record_entry(source_path, archive_name_str)
+
+        published_volumes: list[Path] = []
+        for temp_volume in writer.volumes:
+            final_path = output_zip.with_name(temp_volume.name)
+            _publish_archive(temp_volume, final_path)
+            published_volumes.append(final_path)
+        return published_volumes
+
+    console.print(f"[cyan]Building ZIP archive[/] {output_zip}")
+    with tempfile.TemporaryDirectory(
+        prefix=f".{output_zip.name}.",
+        dir=str(output_zip.parent),
+    ) as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+
+        if split_size_bytes and split_size_bytes > 0:
+            split_spec = _format_zip_split_size_spec(split_size_bytes)
+            console.print(
+                f"[cyan]Creating multipart ZIP volumes up to {split_spec}[/]"
+            )
+
+            created_archives = _write_multipart_archive(temp_dir)
+            console.print(
+                f"[green]Created[/] {len(created_archives)} multipart ZIP volume(s)"
+            )
+            return archived_count, archived_entries, created_archives
+        else:
+            temp_archive_path = temp_dir / output_zip.name
+            console.print(f"[cyan]Writing[/] temporary archive for {output_zip}")
+            _write_archive(
+                temp_archive_path,
+                [
+                    (source_path, archive_name_str)
+                    for source_path, archive_name_str in entries_to_archive
+                ],
+                log_entries=True,
+            )
+            for source_path, archive_name_str in entries_to_archive:
+                _record_entry(source_path, archive_name_str)
+            _publish_archive(temp_archive_path, output_zip)
+            created_archives = [output_zip]
+
+        console.print(f"[green]Created[/] {len(created_archives)} archive part(s)")
+        return archived_count, archived_entries, created_archives
 
 
 async def _wait_for_stats_create(
@@ -1526,35 +1796,64 @@ def ingest_zip_create(
         "--paths-file",
         help="Text file with one file, directory, or glob pattern per line (supports $VARS and ~ per line)",
     ),
-    overwrite: bool = typer.Option(
+    no_overwrite: bool = typer.Option(
         False,
-        "--overwrite",
-        help="Overwrite the ZIP file if it already exists",
+        "--no-overwrite",
+        help="Do not overwrite the ZIP file if it already exists",
+    ),
+    no_preserve_path: bool = typer.Option(
+        False,
+        "--no-preserve-path",
+        help="Do not preserve the source path hierarchy inside the archive entries",
+    ),
+    split_size: str | None = typer.Option(
+        None,
+        "--split-size",
+        help="Create multipart ZIP volumes at this size (bytes, kb, mb, gb; default: disabled)",
     ),
 ) -> None:
     """Create a ZIP archive from files, directories, or glob patterns."""
 
+    overwrite = not no_overwrite
+    preserve_path = not no_preserve_path
     output_path = _resolve_path(output_zip)
     source_paths = _expand_zip_source_patterns(path_patterns or [], paths_file)
+    split_size_bytes = _parse_zip_split_size(split_size)
+    if split_size_bytes is not None and split_size_bytes < 0:
+        raise typer.BadParameter("Split size must be zero or greater")
 
     if output_path.exists() and not overwrite:
         raise typer.BadParameter(
-            f"Output ZIP already exists: {output_path}. Use --overwrite to replace it"
+            f"Output ZIP already exists: {output_path}. Omit --no-overwrite to replace it"
         )
+    if split_size_bytes and split_size_bytes > 0 and not overwrite:
+        for archive_path in output_path.parent.glob(f"{output_path.name}.*"):
+            if not archive_path.name.removeprefix(f"{output_path.name}.").isdigit():
+                continue
+            raise typer.BadParameter(
+                f"Output ZIP already exists: {archive_path}. Omit --no-overwrite to replace it"
+            )
 
-    archived_count, archived_entries = _build_zip_from_sources(
-        output_path, source_paths
+    archived_count, archived_entries, created_archives = _build_zip_from_sources(
+        output_path,
+        source_paths,
+        preserve_path=preserve_path,
+        split_size_bytes=split_size_bytes,
     )
     print_result(
         {
-            "zip_file": str(output_path),
+            "zip_files": [str(path) for path in created_archives],
             "sources": [str(path) for path, _ in source_paths],
             "files_archived": archived_count,
+            "entries_archived": len(archived_entries),
             "entries": archived_entries,
+            "preserve_path": preserve_path,
+            "split_size": split_size_bytes,
         },
         formatter=lambda data: console.print(
-            f"Created ZIP {data['zip_file']} from {len(data['sources'])} source"
-            f"{'s' if len(data['sources']) != 1 else ''} with {data['files_archived']} file(s)."
+            f"Created ZIP archive(s) {', '.join(data['zip_files'])} from {len(data['sources'])} source"
+            f"{'s' if len(data['sources']) != 1 else ''} with {data['files_archived']} file(s), "
+            f"{data['entries_archived']} ZIP entr{'y' if data['entries_archived'] == 1 else 'ies'}."
         ),
     )
 

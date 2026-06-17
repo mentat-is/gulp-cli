@@ -576,7 +576,12 @@ gulp-cli ingest zip-create OUTPUT_ZIP [PATH_PATTERN...] [OPTIONS]
 **Options:**
 
 - `--paths-file TEXT` — Text file with one source path expression per line (supports environment variables and `~` per line)
-- `--overwrite` — Overwrite output ZIP if it already exists
+- `--no-overwrite` — Do not overwrite output ZIP if it already exists (default: overwrite enabled)
+- `--no-preserve-path` — Do not preserve the source path hierarchy inside archive entries (default: preserve path enabled)
+- `--split-size TEXT` — Create multipart ZIP volumes at this size (bytes, `kb`, `mb`, `gb`; default: disabled)
+
+When `--split-size` is set, `zip-create` writes multipart ZIP volumes such as `evidence.zip.001`, `evidence.zip.002`, etc. Extract those volumes with `7z` or another tool that supports split ZIP files.
+When `--paths-file` is set, positional `PATH_PATTERN` values are ignored. Without `--paths-file`, positional `PATH_PATTERN` values are used.
 
 **Examples:**
 
@@ -585,10 +590,10 @@ gulp-cli ingest zip-create OUTPUT_ZIP [PATH_PATTERN...] [OPTIONS]
 gulp-cli ingest zip-create /tmp/evidence.zip /data/host1/*.evtx /data/host2 /data/readme.txt
 
 # Use environment variables and home shortcuts
-gulp-cli ingest zip-create '$CASE_DIR/evidence.zip' '$CASE_DIR/raw/*.json' '~/pcaps/*.pcap' --overwrite
+gulp-cli ingest zip-create '$CASE_DIR/evidence.zip' '$CASE_DIR/raw/*.json' '~/pcaps/*.pcap'
 
 # Read source path expressions from a file
-gulp-cli ingest zip-create /tmp/evidence.zip --paths-file /tmp/evidence_paths.txt --overwrite
+gulp-cli ingest zip-create /tmp/evidence.zip --paths-file /tmp/evidence_paths.txt
 ```
 
 ---

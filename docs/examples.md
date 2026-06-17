@@ -175,8 +175,7 @@ gulp-cli ingest file incident-001 csv /data/access_log.csv \
   --plugin-params '{"delimiter":";","encoding":"iso-8859-1","has_header":true}'
 
 # pass mapping directly without using a mapping file
-gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters": { "mappings": { "test
-_mapping": { "fields": { "Created0x10": { "ecs": [ "@timestamp" ] } } } } } }' --reset-operation --wait
+gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters": { "mappings": { "test_mapping": { "fields": { "Created0x10": { "ecs": ["@timestamp" ] } } } } } }' --reset-operation --wait
 
 # pass mapping using a gulp mapping file with mapping_id to specify which mapping to use in the file
 gulp-cli ingest file test_operation csv ./samples/mftecmd/sample_record.csv --plugin-params '{ "mapping_parameters"
@@ -220,11 +219,11 @@ gulp-cli ingest zip incident-001 /evidence/evidence.zip --create-operation
 
 ```bash
 # Build ZIP from mixed sources: file, directory, and wildcard mask
-gulp-cli ingest zip-create /evidence/evidence.zip /forensic/host1/*.evtx /forensic/host2 /forensic/notes.txt --overwrite
+gulp-cli ingest zip-create /evidence/evidence.zip /forensic/host1/*.evtx /forensic/host2 /forensic/notes.txt --no-overwrite
 
 # Use environment variables and ~ in source expressions and output path
 export CASE_ROOT=~/cases/incident-001
-gulp-cli ingest zip-create '$CASE_ROOT/evidence.zip' '$CASE_ROOT/windows/*.evtx' '$CASE_ROOT/network/*' --overwrite
+gulp-cli ingest zip-create '$CASE_ROOT/evidence.zip' '$CASE_ROOT/windows/*.evtx' '$CASE_ROOT/network/*' --no-overwrite
 
 # Build ZIP from a text file (one path expression per line)
 cat > /tmp/evidence_paths.txt <<'EOF'
