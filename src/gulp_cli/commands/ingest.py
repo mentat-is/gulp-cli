@@ -355,7 +355,9 @@ def _build_zip_from_sources(
 
     def _record_entry(source_path: Path, archive_name_str: str) -> None:
         nonlocal archived_count
-        entry_name = f"{archive_name_str}/" if source_path.is_dir() else archive_name_str
+        entry_name = (
+            f"{archive_name_str}/" if source_path.is_dir() else archive_name_str
+        )
         if entry_name in seen_archive_entries or source_path in seen_source_files:
             return
         seen_archive_entries.add(entry_name)
@@ -492,9 +494,7 @@ def _build_zip_from_sources(
 
         if split_size_bytes and split_size_bytes > 0:
             split_spec = _format_zip_split_size_spec(split_size_bytes)
-            console.print(
-                f"[cyan]Creating multipart ZIP volumes up to {split_spec}[/]"
-            )
+            console.print(f"[cyan]Creating multipart ZIP volumes up to {split_spec}[/]")
 
             created_archives = _write_multipart_archive(temp_dir)
             console.print(
@@ -1096,7 +1096,11 @@ def ingest_file(
         ...,
         help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
     ),
-    context_name: str = typer.Option("sdk_context", "--context-name"),
+    context_name: str = typer.Option(
+        "sdk_context",
+        "--context-name",
+        help="Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id`.",
+    ),
     plugin_params: str | None = typer.Option(
         None, "--plugin-params", help="JSON object for plugin_params"
     ),
