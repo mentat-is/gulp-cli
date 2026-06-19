@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import tempfile
+import uuid
 import zipfile
 from glob import glob, has_magic
 from pathlib import Path
@@ -53,11 +54,36 @@ def _format_per_file_progress_line(item: dict[str, Any]) -> str:
     req_tag = req_id[:8] if req_id else "no-reqid"
     file_name = Path(str(item.get("file") or "")).name or "<unknown>"
     status = str(item.get("status") or "unknown")
+    if status in {"failed", "canceled"}:
+        status = f"{status.upper()}!"
     ingested = int(item.get("ingested") or 0)
     skipped = int(item.get("skipped") or 0)
     failed = int(item.get("failed") or 0)
     return (
         f"[{req_tag}] {file_name}: {status} "
+        f"(ingested={ingested}, skipped={skipped}, failed={failed})"
+    )
+
+
+def _format_per_file_log_line(item: dict[str, Any]) -> str:
+    req_id = str(item.get("req_id") or "")
+    req_tag = req_id[:8] if req_id else "no-reqid"
+    file_name = Path(str(item.get("file") or "")).name or "<unknown>"
+    event = str(item.get("event") or "update").replace("_", " ")
+    status = str(item.get("status") or "unknown")
+    if status in {"failed", "canceled"}:
+        status = f"{status.upper()}!"
+    ingested = int(item.get("ingested") or 0)
+    skipped = int(item.get("skipped") or 0)
+    failed = int(item.get("failed") or 0)
+    pct = item.get("pct")
+    prefix = (
+        f"[{req_tag}] {file_name} {event}: {status}"
+        if pct is None
+        else f"[{req_tag}] {file_name} {event}: {status} ({int(pct)}%)"
+    )
+    return (
+        f"{prefix} "
         f"(ingested={ingested}, skipped={skipped}, failed={failed})"
     )
 
@@ -822,12 +848,16 @@ class _IngestWsTracker:
         ws: Any,
         *,
         source_done_is_terminal: bool = False,
+        log_updates: bool = False,
+        request_label_getter: Callable[[str], str] | None = None,
         request_status_fetcher: (
             Callable[[str], Awaitable[dict[str, Any] | None]] | None
         ) = None,
     ) -> None:
         self._ws = ws
         self._source_done_is_terminal = source_done_is_terminal
+        self._log_updates = log_updates
+        self._request_label_getter = request_label_getter or (lambda req_id: req_id)
         self._request_status_fetcher = request_status_fetcher
         self._states: dict[str, dict[str, Any]] = {}
         self._confirm_events: dict[str, asyncio.Event] = {}
@@ -844,6 +874,8 @@ class _IngestWsTracker:
         client: Any,
         *,
         source_done_is_terminal: bool = False,
+        log_updates: bool = False,
+        request_label_getter: Callable[[str], str] | None = None,
         request_status_fetcher: (
             Callable[[str], Awaitable[dict[str, Any] | None]] | None
         ) = None,
@@ -852,6 +884,8 @@ class _IngestWsTracker:
         return cls(
             ws,
             source_done_is_terminal=source_done_is_terminal,
+            log_updates=log_updates,
+            request_label_getter=request_label_getter,
             request_status_fetcher=request_status_fetcher,
         )
 
@@ -872,6 +906,10 @@ class _IngestWsTracker:
                 "seen_confirm": False,
             }
         return self._states[req_id]
+
+    def _request_label(self, req_id: str) -> str:
+        label = self._request_label_getter(req_id)
+        return Path(label).name or label or req_id
 
     @staticmethod
     def _extract_payload_obj(msg: WSMessage) -> dict[str, Any]:
@@ -926,11 +964,12 @@ class _IngestWsTracker:
             state["ingested"] += done_ingested
             state["skipped"] += done_skipped
             state["failed"] += done_failed
+            source_status = str(obj.get("status", state["status"]))
+            state["status"] = source_status
             if (
                 self._source_done_is_terminal
-                and state.get("status") not in _TERMINAL_STATUSES
+                and source_status not in _TERMINAL_STATUSES
             ):
-                state["status"] = "done"
                 state["seen_confirm"] = True
 
                 confirm_ev = self._confirm_events.get(req_id)
@@ -940,6 +979,20 @@ class _IngestWsTracker:
                 terminal_ev = self._terminal_events.get(req_id)
                 if terminal_ev is not None:
                     terminal_ev.set()
+            if self._log_updates:
+                console.print(
+                    _format_per_file_log_line(
+                        {
+                            "event": msg.type,
+                            "req_id": req_id,
+                            "file": self._request_label(req_id),
+                            "status": source_status,
+                            "ingested": state.get("ingested", 0),
+                            "skipped": state.get("skipped", 0),
+                            "failed": state.get("failed", 0),
+                        }
+                    )
+                )
             return
 
         if msg.type in (
@@ -966,6 +1019,21 @@ class _IngestWsTracker:
                 terminal_ev = self._terminal_events.get(req_id)
                 if terminal_ev is not None:
                     terminal_ev.set()
+            if self._log_updates:
+                console.print(
+                    _format_per_file_log_line(
+                        {
+                            "event": msg.type,
+                            "req_id": req_id,
+                            "file": self._request_label(req_id),
+                            "status": state["status"],
+                            "ingested": state["ingested"],
+                            "skipped": state["skipped"],
+                            "failed": state["failed"],
+                            "pct": obj.get("ingest_percentage"),
+                        }
+                    )
+                )
             return
 
         if msg.type == WSMessageType.ERROR.value:
@@ -974,6 +1042,20 @@ class _IngestWsTracker:
             terminal_ev = self._terminal_events.get(req_id)
             if terminal_ev is not None:
                 terminal_ev.set()
+            if self._log_updates:
+                console.print(
+                    _format_per_file_log_line(
+                        {
+                            "event": msg.type,
+                            "req_id": req_id,
+                            "file": self._request_label(req_id),
+                            "status": state["status"],
+                            "ingested": state["ingested"],
+                            "skipped": state["skipped"],
+                            "failed": state["failed"],
+                        }
+                    )
+                )
 
     async def wait_for_confirm(self, req_id: str, timeout: float) -> bool:
         """Return True if timed out waiting for STATS_CREATE/UPDATE for req_id."""
@@ -1043,7 +1125,10 @@ class _IngestWsTracker:
                 wait_slice = 10.0 if remaining is None else min(10.0, remaining)
                 try:
                     await asyncio.wait_for(ev.wait(), timeout=wait_slice)
-                    break
+                    if state.get("status") in _TERMINAL_STATUSES:
+                        break
+                    ev.clear()
+                    continue
                 except asyncio.TimeoutError:
                     # Fallback: poll current request status in case websocket terminal
                     # notifications are delayed or missed under high load.
@@ -1131,8 +1216,18 @@ def ingest_file(
             "reception of each request via STATS_CREATE websocket event."
         ),
     ),
+    wait_log: bool = typer.Option(
+        False,
+        "--wait-log",
+        help=(
+            "Wait for all ingestions to complete and print websocket updates "
+            "to stdout as they arrive."
+        ),
+    ),
     wait_timeout: int = typer.Option(
-        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+        300,
+        "--timeout",
+        help="Seconds to wait for completion (only used with --wait/--wait-log)",
     ),
     show_per_file_progress: bool = typer.Option(
         True,
@@ -1150,7 +1245,8 @@ def ingest_file(
 
     By default the command returns once the backend has confirmed every request
     via a STATS_CREATE websocket notification — no HTTP polling.  Pass --wait
-    to block until ingestion fully completes, with a live progress bar.
+    to block until ingestion fully completes, with a live progress bar, or
+    --wait-log to stream websocket updates as they arrive.
     """
 
     unique_files = _expand_file_patterns(file_patterns)
@@ -1165,14 +1261,19 @@ def ingest_file(
     async def _run() -> None:
         if preview and wait:
             raise typer.BadParameter("--preview and --wait are mutually exclusive")
+        if preview and wait_log:
+            raise typer.BadParameter("--preview and --wait-log are mutually exclusive")
         if preview and reset_operation:
             raise typer.BadParameter(
                 "--preview and --reset-operation are mutually exclusive"
             )
+        if wait and wait_log:
+            raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
         if reset_operation and create_operation_if_missing:
             raise typer.BadParameter(
                 "--reset-operation and --create-operation are mutually exclusive"
             )
+        wait_mode = wait or wait_log
 
         async with get_client() as client:
             # Establish WS BEFORE any ingest call so ws_id is live when the
@@ -1189,9 +1290,12 @@ def ingest_file(
                 data = resp.get("data")
                 return data if isinstance(data, dict) else None
 
+            req_to_file: dict[str, str] = {}
             tracker = await _IngestWsTracker.create(
                 client,
                 source_done_is_terminal=True,
+                log_updates=wait_log,
+                request_label_getter=lambda req_id: req_to_file.get(req_id, req_id),
                 request_status_fetcher=_fetch_request_status,
             )
 
@@ -1240,6 +1344,8 @@ def ingest_file(
 
             async def _fire_one(file_path: str) -> tuple[str, str, dict[str, Any]]:
                 """Submit ingestion for one file; returns (file_path, req_id, submission)."""
+                req_id = str(uuid.uuid4())
+                req_to_file[req_id] = file_path
                 result = await client.ingest.file(
                     operation_id=operation_id,
                     plugin_name=plugin,
@@ -1248,6 +1354,7 @@ def ingest_file(
                     params={
                         **params,
                         "original_file_path": str(Path(file_path).resolve()),
+                        "req_id": req_id,
                     },
                     wait=False,  # we handle waiting ourselves below
                 )
@@ -1255,7 +1362,9 @@ def ingest_file(
                     submission = result.model_dump(exclude_none=True)
                 else:
                     submission = {"req_id": getattr(result, "req_id", None)}
-                req_id = str(submission.get("req_id") or "")
+                req_id = str(submission.get("req_id") or req_id)
+                if req_id:
+                    req_to_file[req_id] = file_path
                 return file_path, req_id, submission
 
             # Sliding window dispatcher: keep up to batch_size requests in flight.
@@ -1274,7 +1383,7 @@ def ingest_file(
                 file_path: str,
             ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]:
                 fpath, req_id, submission = await _fire_one(file_path)
-                if wait:
+                if wait_mode:
                     waited = await tracker.wait_for_terminal(
                         fpath, req_id, wait_timeout
                     )
@@ -1352,7 +1461,7 @@ def ingest_file(
                     progress.__exit__(None, None, None)
                 tracker.close()
 
-            if wait:
+            if wait_mode:
                 results = [
                     completed_by_file.get(
                         fp,
@@ -1448,8 +1557,18 @@ def ingest_file_to_source(
             "reception of each request via STATS_CREATE websocket event."
         ),
     ),
+    wait_log: bool = typer.Option(
+        False,
+        "--wait-log",
+        help=(
+            "Wait for all ingestions to complete and print websocket updates "
+            "to stdout as they arrive."
+        ),
+    ),
     wait_timeout: int = typer.Option(
-        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+        300,
+        "--timeout",
+        help="Seconds to wait for completion (only used with --wait/--wait-log)",
     ),
     show_per_file_progress: bool = typer.Option(
         True,
@@ -1471,6 +1590,9 @@ def ingest_file_to_source(
         raise typer.Exit(1)
 
     async def _run() -> None:
+        if wait and wait_log:
+            raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
+
         async with get_client() as client:
             await client.ensure_websocket()
 
@@ -1487,6 +1609,8 @@ def ingest_file_to_source(
             tracker = await _IngestWsTracker.create(
                 client,
                 source_done_is_terminal=True,
+                log_updates=wait_log,
+                request_label_getter=lambda req_id: req_to_file.get(req_id, req_id),
                 request_status_fetcher=_fetch_request_status,
             )
 
@@ -1498,19 +1622,26 @@ def ingest_file_to_source(
                 "flt": parse_json_option(flt, field_name="flt") or {},
             }
 
+            req_to_file: dict[str, str] = {}
+
             async def _fire_one(file_path: str) -> tuple[str, str, dict[str, Any]]:
+                req_id = str(uuid.uuid4())
+                req_to_file[req_id] = file_path
                 result = await client.ingest.file_to_source(
                     source_id=source_id,
                     file_path=file_path,
                     plugin_params=params["plugin_params"] or None,
                     flt=params["flt"] or None,
+                    req_id=req_id,
                     wait=False,
                 )
                 if hasattr(result, "model_dump"):
                     submission = result.model_dump(exclude_none=True)
                 else:
                     submission = {"req_id": getattr(result, "req_id", None)}
-                req_id = str(submission.get("req_id") or "")
+                req_id = str(submission.get("req_id") or req_id)
+                if req_id:
+                    req_to_file[req_id] = file_path
                 return file_path, req_id, submission
 
             file_req_map: dict[str, str] = {}
@@ -1523,12 +1654,13 @@ def ingest_file_to_source(
                     tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]
                 ]
             ] = set()
+            wait_mode = wait or wait_log
 
             async def _submit_and_gate(
                 file_path: str,
             ) -> tuple[str, str, dict[str, Any], dict[str, Any] | None, bool]:
                 fpath, req_id, submission = await _fire_one(file_path)
-                if wait:
+                if wait_mode:
                     waited = await tracker.wait_for_terminal(
                         fpath, req_id, wait_timeout
                     )
@@ -1606,7 +1738,7 @@ def ingest_file_to_source(
                     progress.__exit__(None, None, None)
                 tracker.close()
 
-            if wait:
+            if wait_mode:
                 results = [
                     completed_by_file.get(
                         fp,
@@ -1700,8 +1832,15 @@ def ingest_zip(
         help="Create operation automatically when it does not exist",
     ),
     wait: bool = typer.Option(False, "--wait", help="Wait for ingestion completion"),
+    wait_log: bool = typer.Option(
+        False,
+        "--wait-log",
+        help="Wait for ingestion completion and print websocket updates as they arrive.",
+    ),
     wait_timeout: int = typer.Option(
-        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+        300,
+        "--timeout",
+        help="Seconds to wait for completion (only used with --wait/--wait-log)",
     ),
 ) -> None:
     """Ingest a ZIP archive into an operation."""
@@ -1711,9 +1850,22 @@ def ingest_zip(
             raise typer.BadParameter(
                 "--reset-operation and --create-operation are mutually exclusive"
             )
+        if wait and wait_log:
+            raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
+        wait_mode = wait or wait_log
 
         async with get_client() as client:
             await client.ensure_websocket()
+
+            async def _fetch_request_status(req_id: str) -> dict[str, Any] | None:
+                try:
+                    resp = await client._request(
+                        "GET", "/request_get_by_id", params={"obj_id": req_id}
+                    )
+                except Exception:
+                    return None
+                data = resp.get("data")
+                return data if isinstance(data, dict) else None
 
             if reset_operation:
                 await client.operations.delete(operation_id, force=True)
@@ -1733,6 +1885,14 @@ def ingest_zip(
                 "context_name": context_name,
                 "flt": parse_json_option(flt, field_name="flt") or {},
             }
+            req_to_label: dict[str, str] = {}
+            tracker = await _IngestWsTracker.create(
+                client,
+                source_done_is_terminal=True,
+                log_updates=wait_log,
+                request_label_getter=lambda req_id: req_to_label.get(req_id, zip_file),
+                request_status_fetcher=_fetch_request_status,
+            )
             result = await client.ingest.zip(
                 operation_id=operation_id,
                 plugin_name="zip",
@@ -1752,15 +1912,12 @@ def ingest_zip(
                 print_result(submission)
                 return
 
+            req_to_label[req_id] = zip_file
             file_req_map: dict[str, str] = {zip_file: req_id}
 
-            if wait:
-                waited = await _wait_for_completion(client, file_req_map, wait_timeout)
-                print_result(
-                    waited[0]
-                    if waited
-                    else {"file": zip_file, "req_id": req_id, "status": "unknown"}
-                )
+            if wait_mode:
+                waited = await tracker.wait_for_terminal(zip_file, req_id, wait_timeout)
+                print_result(waited)
             else:
                 timed_out = await _wait_for_stats_create(client, [req_id])
                 if timed_out and not get_runtime_verbose():
@@ -1897,8 +2054,15 @@ def ingest_raw(
         help="Create operation automatically when it does not exist",
     ),
     wait: bool = typer.Option(False, "--wait", help="Wait for ingestion completion"),
+    wait_log: bool = typer.Option(
+        False,
+        "--wait-log",
+        help="Wait for ingestion completion and print websocket updates as they arrive.",
+    ),
     wait_timeout: int = typer.Option(
-        300, "--timeout", help="Seconds to wait for completion (only used with --wait)"
+        300,
+        "--timeout",
+        help="Seconds to wait for completion (only used with --wait/--wait-log)",
     ),
 ) -> None:
     """Ingest raw payload into an operation."""
@@ -1913,9 +2077,22 @@ def ingest_raw(
             raise typer.BadParameter(
                 "--reset-operation and --create-operation are mutually exclusive"
             )
+        if wait and wait_log:
+            raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
+        wait_mode = wait or wait_log
 
         async with get_client() as client:
             await client.ensure_websocket()
+
+            async def _fetch_request_status(req_id: str) -> dict[str, Any] | None:
+                try:
+                    resp = await client._request(
+                        "GET", "/request_get_by_id", params={"obj_id": req_id}
+                    )
+                except Exception:
+                    return None
+                data = resp.get("data")
+                return data if isinstance(data, dict) else None
 
             if reset_operation:
                 await client.operations.delete(operation_id, force=True)
@@ -1942,6 +2119,15 @@ def ingest_raw(
                 except json.JSONDecodeError:
                     payload_data = data
 
+            request_label = data_file if data_file is not None else "raw-input"
+            req_to_label: dict[str, str] = {}
+            tracker = await _IngestWsTracker.create(
+                client,
+                source_done_is_terminal=True,
+                log_updates=wait_log,
+                request_label_getter=lambda req_id: req_to_label.get(req_id, request_label),
+                request_status_fetcher=_fetch_request_status,
+            )
             params: dict[str, Any] = {
                 "plugin_params": parse_json_option(
                     plugin_params, field_name="plugin-params"
@@ -1971,20 +2157,14 @@ def ingest_raw(
                 print_result(submission)
                 return
 
-            request_label = data_file if data_file is not None else "raw-input"
+            req_to_label[resolved_req_id] = request_label
             file_req_map: dict[str, str] = {request_label: resolved_req_id}
 
-            if wait:
-                waited = await _wait_for_completion(client, file_req_map, wait_timeout)
-                print_result(
-                    waited[0]
-                    if waited
-                    else {
-                        "file": request_label,
-                        "req_id": resolved_req_id,
-                        "status": "unknown",
-                    }
+            if wait_mode:
+                waited = await tracker.wait_for_terminal(
+                    request_label, resolved_req_id, wait_timeout
                 )
+                print_result(waited)
             else:
                 timed_out = await _wait_for_stats_create(client, [resolved_req_id])
                 if timed_out and not get_runtime_verbose():
