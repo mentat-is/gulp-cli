@@ -463,6 +463,7 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 - `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
+- `--paths-file PATH` — Text file with one file or glob pattern per line
 - `--reset-operation` — Delete and recreate the operation before ingest starts
 - `--create-operation` — Create operation automatically when it does not exist
 - `--preview` — Run preview-only ingestion (no persistence)
@@ -485,6 +486,9 @@ gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx'
 
 # Multiple patterns
 gulp-cli ingest file my_op win_evtx '**/*.evtx' '/logs/*.json'
+
+# Paths file
+gulp-cli ingest file my_op win_evtx --paths-file /tmp/file_paths.txt
 
 # With plugin parameters
 gulp-cli ingest file my_op csv file.csv --plugin-params '{"delimiter":";","encoding":"utf-8"}'
@@ -518,6 +522,7 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 
 - `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults)
 - `--flt TEXT` — JSON object for GulpIngestionFilter
+- `--paths-file PATH` — Text file with one file or glob pattern per line
 - `--wait` — Wait for completion with progress
 - `--show-per-file-progress / --no-show-per-file-progress` — Show one line per completed file request in `--wait` mode (default: on)
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode
@@ -528,6 +533,7 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 ```bash
 gulp-cli ingest file-to-source source123 /new/System.evtx --wait
 gulp-cli ingest file-to-source source123 '/new/*.evtx'
+gulp-cli ingest file-to-source source123 --paths-file /tmp/file_paths.txt
 ```
 
 ---

@@ -67,7 +67,7 @@ def _format_per_file_progress_line(item: dict[str, Any]) -> str:
 
 def _format_per_file_log_line(item: dict[str, Any]) -> str:
     req_id = str(item.get("req_id") or "")
-    req_tag = req_id[:8] if req_id else "no-reqid"
+    req_tag = req_id if req_id else "no-reqid"
     file_name = Path(str(item.get("file") or "")).name or "<unknown>"
     event = str(item.get("event") or "update").replace("_", " ")
     status = str(item.get("status") or "unknown")
@@ -78,9 +78,9 @@ def _format_per_file_log_line(item: dict[str, Any]) -> str:
     failed = int(item.get("failed") or 0)
     pct = item.get("pct")
     prefix = (
-        f"[{req_tag}] {file_name} {event}: {status}"
+        f"req_id={req_tag} {file_name} {event}: {status}"
         if pct is None
-        else f"[{req_tag}] {file_name} {event}: {status} ({int(pct)}%)"
+        else f"req_id={req_tag} {file_name} {event}: {status} ({int(pct)}%)"
     )
     return (
         f"{prefix} "
@@ -105,24 +105,44 @@ async def _ensure_operation_exists(
             print_warning(f"Operation {operation_id} was missing and has been created.")
 
 
-def _expand_file_patterns(file_patterns: list[str]) -> list[str]:
-    expanded_files: list[str] = []
-    for pattern in file_patterns:
-        matches = sorted(glob(pattern, recursive=True))
-        if matches:
-            expanded_files.extend(matches)
-        else:
-            # Treat as literal path; server will report the error
-            expanded_files.append(pattern)
+def _read_path_list(
+    positional_paths: list[str],
+    paths_file: str | None,
+    *,
+    noun: str,
+) -> list[str]:
+    if not positional_paths and paths_file is None:
+        raise typer.BadParameter(f"Provide at least one {noun} argument or --paths-file")
 
-    seen: set[str] = set()
-    unique_files: list[str] = []
-    for file_path in expanded_files:
-        if file_path not in seen:
-            seen.add(file_path)
-            unique_files.append(file_path)
+    if paths_file is None:
+        return list(positional_paths)
 
-    return sorted(unique_files, key=str.casefold)
+    file_path = _resolve_path(paths_file)
+    if not file_path.is_file():
+        raise typer.BadParameter(f"Paths file not found: {file_path}")
+
+    console.print(f"[cyan]Reading path list[/] {file_path}")
+    if positional_paths:
+        console.print(
+            f"[yellow]Ignoring positional {noun} patterns[/] because --paths-file is set"
+        )
+    try:
+        lines = file_path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise typer.BadParameter(
+            f"Paths file must be UTF-8 text, not binary data: {file_path}. "
+            "For shell globs, omit --paths-file and pass the pattern as a positional argument."
+        ) from exc
+
+    raw_entries = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    console.print(
+        f"[cyan]Loaded[/] {len(raw_entries)} {noun} expression(s) from {file_path}"
+    )
+    return raw_entries
 
 
 def _resolve_path(raw_path: str) -> Path:
@@ -167,32 +187,11 @@ def _format_zip_split_size_spec(size_bytes: int) -> str:
     return str(size_bytes)
 
 
-def _expand_zip_source_patterns(
+def _expand_source_patterns(
     path_patterns: list[str],
     paths_file: str | None,
 ) -> list[tuple[Path, Path]]:
-    if not path_patterns and paths_file is None:
-        raise typer.BadParameter("Provide at least one path argument or --paths-file")
-
-    if paths_file is not None:
-        file_path = _resolve_path(paths_file)
-        if not file_path.is_file():
-            raise typer.BadParameter(f"Paths file not found: {file_path}")
-        console.print(f"[cyan]Reading path list[/] {file_path}")
-        if path_patterns:
-            console.print(
-                "[yellow]Ignoring positional path patterns[/] because --paths-file is set"
-            )
-        raw_entries = [
-            line.strip()
-            for line in file_path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-        console.print(
-            f"[cyan]Loaded[/] {len(raw_entries)} path expression(s) from {file_path}"
-        )
-    else:
-        raw_entries = list(path_patterns)
+    raw_entries = _read_path_list(path_patterns, paths_file, noun="path")
 
     expanded_paths: list[tuple[Path, Path]] = []
     seen: set[tuple[Path, Path]] = set()
@@ -1181,6 +1180,11 @@ def ingest_file(
         ...,
         help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
     ),
+    paths_file: str | None = typer.Option(
+        None,
+        "--paths-file",
+        help="Text file with one file or glob pattern per line (supports $VARS and ~ per line)",
+    ),
     context_name: str = typer.Option(
         "sdk_context",
         "--context-name",
@@ -1249,7 +1253,10 @@ def ingest_file(
     --wait-log to stream websocket updates as they arrive.
     """
 
-    unique_files = _expand_file_patterns(file_patterns)
+    unique_files = [
+        str(path)
+        for path, _base_dir in _expand_source_patterns(file_patterns, paths_file)
+    ]
 
     if not unique_files:
         print_error("No files found matching the provided patterns.")
@@ -1540,6 +1547,11 @@ def ingest_file_to_source(
         ...,
         help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
     ),
+    paths_file: str | None = typer.Option(
+        None,
+        "--paths-file",
+        help="Text file with one file or glob pattern per line (supports $VARS and ~ per line)",
+    ),
     plugin_params: str | None = typer.Option(
         None,
         "--plugin-params",
@@ -1584,7 +1596,10 @@ def ingest_file_to_source(
 ) -> None:
     """Ingest one or more files into an existing source."""
 
-    unique_files = _expand_file_patterns(file_patterns)
+    unique_files = [
+        str(path)
+        for path, _base_dir in _expand_source_patterns(file_patterns, paths_file)
+    ]
     if not unique_files:
         print_error("No files found matching the provided patterns.")
         raise typer.Exit(1)
@@ -1978,7 +1993,7 @@ def ingest_zip_create(
     overwrite = not no_overwrite
     preserve_path = not no_preserve_path
     output_path = _resolve_path(output_zip)
-    source_paths = _expand_zip_source_patterns(path_patterns or [], paths_file)
+    source_paths = _expand_source_patterns(path_patterns or [], paths_file)
     split_size_bytes = _parse_zip_split_size(split_size)
     if split_size_bytes is not None and split_size_bytes < 0:
         raise typer.BadParameter("Split size must be zero or greater")

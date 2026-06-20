@@ -72,6 +72,7 @@ def test_ingest_ws_tracker_logs_updates_to_stdout(capsys) -> None:
     assert "sample.txt" in out
     assert "stats update" in out
     assert "42%" in out
+    assert "req12345" in out
     assert "ingested=12" in out
     assert "skipped=1" in out
 
@@ -101,6 +102,7 @@ def test_ingest_ws_tracker_marks_failures_obviously(capsys) -> None:
 
     out = capsys.readouterr().out
     assert "FAILED!" in out
+    assert "req12345" in out
     assert "sample.txt" in out
 
 

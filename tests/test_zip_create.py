@@ -10,7 +10,7 @@ import typer
 
 from gulp_cli.commands.ingest import (
     _build_zip_from_sources,
-    _expand_zip_source_patterns,
+    _expand_source_patterns,
     ingest_zip_create,
 )
 
@@ -36,7 +36,7 @@ def test_ingest_zip_create_no_overwrite_defaults_to_disabled() -> None:
     assert no_overwrite_default.default is False
 
 
-def test_expand_zip_source_patterns_prefers_paths_file(
+def test_expand_source_patterns_prefers_paths_file(
     tmp_path: Path,
 ) -> None:
     arg_file = tmp_path / "arg.txt"
@@ -46,12 +46,12 @@ def test_expand_zip_source_patterns_prefers_paths_file(
     paths_file = tmp_path / "paths.txt"
     paths_file.write_text(str(file_entry), encoding="utf-8")
 
-    expanded = _expand_zip_source_patterns([str(arg_file)], str(paths_file))
+    expanded = _expand_source_patterns([str(arg_file)], str(paths_file))
 
     assert expanded == [(file_entry.resolve(), file_entry.resolve().parent)]
 
 
-def test_expand_zip_source_patterns_prints_paths_file_info(
+def test_expand_source_patterns_prints_paths_file_info(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     file_entry = tmp_path / "from-file.txt"
@@ -59,7 +59,7 @@ def test_expand_zip_source_patterns_prints_paths_file_info(
     paths_file = tmp_path / "paths.txt"
     paths_file.write_text(f"# comment\n{file_entry}\n", encoding="utf-8")
 
-    _expand_zip_source_patterns([], str(paths_file))
+    _expand_source_patterns([], str(paths_file))
 
     captured = capsys.readouterr().out
     assert "Reading path list" in captured
