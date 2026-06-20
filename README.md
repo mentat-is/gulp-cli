@@ -40,6 +40,7 @@ cd gulp-cli && pip install -e .
 
 # Verify installation
 gulp-cli --help
+gulp-version
 ```
 
 ### Portable Bundles

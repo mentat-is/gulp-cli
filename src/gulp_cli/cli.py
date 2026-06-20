@@ -15,12 +15,12 @@ from gulp_cli.commands.mapping import app as mapping_app
 from gulp_cli.commands.operations import app as operation_app
 from gulp_cli.commands.plugin import app as plugin_app
 from gulp_cli.commands.query import app as query_app
+from gulp_cli.commands.utility import app as utility_app
 from gulp_cli.commands.source import app as source_app
 from gulp_cli.commands.stats import app as stats_app
 from gulp_cli.commands.storage import app as storage_app
 from gulp_cli.commands.user_group import app as user_group_app
 from gulp_cli.commands.users import app as user_app
-from gulp_sdk.client import GulpClient
 
 from gulp_cli.config import (
     set_runtime_as_user,
@@ -28,27 +28,20 @@ from gulp_cli.config import (
     set_runtime_verbose,
 )
 from gulp_cli.extensions import load_extensions
-
-app = typer.Typer(
-    no_args_is_help=True,
-    help="Modern CLI for gULP, powered by gulp-sdk",
-)
+from gulp_cli.version import print_version
 
 
 def _show_versions(value: bool) -> None:
     if not value:
         return
 
-    from gulp_cli._version import __version__, __commit_id__
-
-    sdk_version = GulpClient("http://localhost:8080").version()
-    print(
-        f"gulp-cli version: {__version__} ({__commit_id__})"
-        if __commit_id__
-        else __version__
-    )
-    print(f"gulp-sdk version: {sdk_version}")
+    print_version()
     raise typer.Exit()
+
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Modern CLI for gULP, powered by gulp-sdk",
+)
 
 
 @app.callback(invoke_without_command=True)
@@ -74,7 +67,7 @@ def main(
         "--version",
         callback=_show_versions,
         is_eager=True,
-        help="Show CLI and SDK versions and exit.",
+        help="Show the CLI version and exit.",
     ),
 ) -> None:
     set_runtime_config_dir(config_dir)
@@ -100,6 +93,7 @@ app.add_typer(plugin_app, name="plugin")
 app.add_typer(mapping_app, name="mapping")
 app.add_typer(enhance_map_app, name="enhance-map")
 app.add_typer(glyph_app, name="glyph")
+app.add_typer(utility_app, name="utility")
 
 load_extensions(
     app,
@@ -122,5 +116,6 @@ load_extensions(
         "mapping": mapping_app,
         "enhance-map": enhance_map_app,
         "glyph": glyph_app,
+        "utility": utility_app,
     },
 )

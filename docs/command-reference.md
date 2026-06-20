@@ -25,6 +25,18 @@ gulp-cli --verbose --as-user USER_NAME <group> <command> ...
 
 ## Core Commands
 
+### `utility`
+
+Utility commands for gULP server metadata and similar endpoints.
+
+```bash
+gulp-cli utility gulp-version
+```
+
+`utility gulp-version` prints only the gULP version and uses the saved CLI session, so run `gulp-cli auth login` first.
+
+---
+
 ### Authentication (`auth`)
 
 #### `login`
