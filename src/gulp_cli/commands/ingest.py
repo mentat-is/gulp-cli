@@ -1187,7 +1187,7 @@ def ingest_file(
     ),
     context_name: str = typer.Option(
         "sdk_context",
-        "--context-name",
+        "--context",
         help="Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id`.",
     ),
     plugin_params: str | None = typer.Option(
@@ -1552,10 +1552,15 @@ def ingest_file_to_source(
         "--paths-file",
         help="Text file with one file or glob pattern per line (supports $VARS and ~ per line)",
     ),
+    plugin: str | None = typer.Option(
+        None,
+        "--plugin",
+        help="Override the plugin associated with the source (requires --plugin-params).",
+    ),
     plugin_params: str | None = typer.Option(
         None,
         "--plugin-params",
-        help="JSON object for plugin_params (overrides source defaults)",
+        help="JSON object for plugin_params (overrides source defaults; required with --plugin, {} is allowed)",
     ),
     flt: str | None = typer.Option(
         None, "--flt", help="JSON object for GulpIngestionFilter"
@@ -1607,6 +1612,8 @@ def ingest_file_to_source(
     async def _run() -> None:
         if wait and wait_log:
             raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
+        if plugin and plugin_params is None:
+            raise typer.BadParameter("--plugin requires --plugin-params")
 
         async with get_client() as client:
             await client.ensure_websocket()
@@ -1645,7 +1652,12 @@ def ingest_file_to_source(
                 result = await client.ingest.file_to_source(
                     source_id=source_id,
                     file_path=file_path,
-                    plugin_params=params["plugin_params"] or None,
+                    plugin=plugin,
+                    plugin_params=(
+                        params["plugin_params"]
+                        if plugin is not None
+                        else params["plugin_params"] or None
+                    ),
                     flt=params["flt"] or None,
                     req_id=req_id,
                     wait=False,
@@ -1832,7 +1844,14 @@ def ingest_zip(
         ...,
         help="Path to a ZIP file which must contain a `metadata.json` in the root, describing the content as specified in gulp's `ingest_zip` docs.",
     ),
-    context_name: str = typer.Option("sdk_context", "--context-name"),
+    context_name: str = typer.Option(
+        "sdk_context",
+        "--context",
+        help=(
+            "Context for ingestion, specify a name to create a new context if it "
+            "doesn't exist, or an existing `context_id`."
+        ),
+    ),
     flt: str | None = typer.Option(
         None, "--flt", help="JSON object for GulpIngestionFilter"
     ),

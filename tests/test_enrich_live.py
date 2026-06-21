@@ -117,7 +117,7 @@ def test_enrich_cli_tag_update_remove_and_untag(tmp_path: Path) -> None:
         operation_id,
         "win_evtx",
         str(SAMPLE_EVTX),
-        "--context-name",
+        "--context",
         "test_context",
         "--reset-operation",
         "--batch-size",

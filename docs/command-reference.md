@@ -460,7 +460,7 @@ gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
 
 **Options:**
 
-- `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
+- `--context TEXT` — Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id` (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
 - `--paths-file PATH` — Text file with one file or glob pattern per line
@@ -520,7 +520,8 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 
 **Options:**
 
-- `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults)
+- `--plugin TEXT` — Override the plugin associated with the source (requires `--plugin-params`)
+- `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults; required when `--plugin` is set, `{}` is allowed)
 - `--flt TEXT` — JSON object for GulpIngestionFilter
 - `--paths-file PATH` — Text file with one file or glob pattern per line
 - `--wait` — Wait for completion with progress
@@ -534,6 +535,7 @@ gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
 gulp-cli ingest file-to-source source123 /new/System.evtx --wait
 gulp-cli ingest file-to-source source123 '/new/*.evtx'
 gulp-cli ingest file-to-source source123 --paths-file /tmp/file_paths.txt
+gulp-cli ingest file-to-source source123 /new/events.json --plugin json --plugin-params '{"mapping_parameters": {}}'
 ```
 
 ---
@@ -555,7 +557,7 @@ gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
 
 **Options:**
 
-- `--context-name TEXT` — Context name used for source grouping (default: `sdk_context`)
+- `--context TEXT` — Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id` (default: `sdk_context`)
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
 - `--create-operation` — Create operation automatically when it does not exist
 - `--wait` — Wait for completion
