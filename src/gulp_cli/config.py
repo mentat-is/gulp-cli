@@ -40,6 +40,10 @@ def get_config_dir() -> Path:
     return Path.home() / ".config" / "gulp-cli"
 
 
+def get_runtime_config_dir() -> Path | None:
+    return _CONFIG_DIR_OVERRIDE.get()
+
+
 def get_config_path() -> Path:
     return get_config_dir() / "config.json"
 

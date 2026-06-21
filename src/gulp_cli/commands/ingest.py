@@ -12,7 +12,7 @@ from glob import glob, has_magic
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from gulp_cli.config import get_runtime_verbose
+from gulp_cli.config import get_runtime_config_dir, get_runtime_verbose
 import typer
 from gulp_sdk.exceptions import NotFoundError
 from gulp_sdk.websocket import WSMessage, WSMessageType
@@ -82,10 +82,41 @@ def _format_per_file_log_line(item: dict[str, Any]) -> str:
         if pct is None
         else f"req_id={req_tag} {file_name} {event}: {status} ({int(pct)}%)"
     )
-    return (
+    line = (
         f"{prefix} "
         f"(ingested={ingested}, skipped={skipped}, failed={failed})"
     )
+    errors = item.get("errors")
+    if errors and item.get("status") == "failed":
+        return f"{line} errors={errors}"
+    return line
+
+
+def _extract_errors(payload: dict[str, Any]) -> list[str]:
+    nested = payload.get("data")
+    candidates = [payload, nested if isinstance(nested, dict) else {}]
+    errors: list[str] = []
+    for data in candidates:
+        raw_errors = data.get("errors")
+        if isinstance(raw_errors, list):
+            errors.extend(str(item) for item in raw_errors if item)
+        elif raw_errors:
+            errors.append(str(raw_errors))
+        for key in ("error", "message", "detail", "reason"):
+            value = data.get(key)
+            if value:
+                errors.append(str(value))
+    return list(dict.fromkeys(errors))
+
+
+def _with_failed_errors(item: dict[str, Any]) -> dict[str, Any]:
+    if item.get("status") != "failed":
+        return item
+    result = item.get("result")
+    errors = _extract_errors(result if isinstance(result, dict) else {})
+    if not errors:
+        return item
+    return {**item, "errors": errors}
 
 
 async def _ensure_operation_exists(
@@ -511,9 +542,11 @@ def _build_zip_from_sources(
         return published_volumes
 
     console.print(f"[cyan]Building ZIP archive[/] {output_zip}")
+    temp_root = get_runtime_config_dir() or output_zip.parent
+    temp_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix=f".{output_zip.name}.",
-        dir=str(output_zip.parent),
+        dir=str(temp_root),
     ) as temp_dir_name:
         temp_dir = Path(temp_dir_name)
 
@@ -528,7 +561,7 @@ def _build_zip_from_sources(
             return archived_count, archived_entries, created_archives
         else:
             temp_archive_path = temp_dir / output_zip.name
-            console.print(f"[cyan]Writing[/] temporary archive for {output_zip}")
+            console.print(f"[cyan]Writing[/] temporary archive for {output_zip} in {temp_archive_path}")
             _write_archive(
                 temp_archive_path,
                 [
@@ -989,6 +1022,7 @@ class _IngestWsTracker:
                             "ingested": state.get("ingested", 0),
                             "skipped": state.get("skipped", 0),
                             "failed": state.get("failed", 0),
+                            "errors": _extract_errors(obj),
                         }
                     )
                 )
@@ -1030,6 +1064,7 @@ class _IngestWsTracker:
                             "skipped": state["skipped"],
                             "failed": state["failed"],
                             "pct": obj.get("ingest_percentage"),
+                            "errors": _extract_errors(obj),
                         }
                     )
                 )
@@ -1052,6 +1087,7 @@ class _IngestWsTracker:
                             "ingested": state["ingested"],
                             "skipped": state["skipped"],
                             "failed": state["failed"],
+                            "errors": _extract_errors(obj),
                         }
                     )
                 )
@@ -1160,7 +1196,7 @@ class _IngestWsTracker:
                                 ev.set()
                                 break
 
-        return {
+        return _with_failed_errors({
             "file": file_path,
             "req_id": req_id,
             "status": state.get("status", "unknown"),
@@ -1169,21 +1205,21 @@ class _IngestWsTracker:
             "failed": state.get("failed", 0),
             "result": state.get("stats", {}),
             "timed_out": timed_out,
-        }
+        })
 
 
 @app.command("file")
 def ingest_file(
     operation_id: str,
     plugin: str,
-    file_patterns: list[str] = typer.Argument(
-        ...,
-        help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
+    file_patterns: list[str] | None = typer.Argument(
+        None,
+        help="One or more files or glob patterns; optional when --paths-file is set",
     ),
     paths_file: str | None = typer.Option(
         None,
         "--paths-file",
-        help="Text file with one file or glob pattern per line (supports $VARS and ~ per line)",
+        help="Text file with one file or glob pattern per line; positional patterns become optional",
     ),
     context_name: str = typer.Option(
         "sdk_context",
@@ -1255,7 +1291,7 @@ def ingest_file(
 
     unique_files = [
         str(path)
-        for path, _base_dir in _expand_source_patterns(file_patterns, paths_file)
+        for path, _base_dir in _expand_source_patterns(file_patterns or [], paths_file)
     ]
 
     if not unique_files:
@@ -1494,6 +1530,7 @@ def ingest_file(
                             "ingested": item.get("ingested", 0),
                             "skipped": item.get("skipped", 0),
                             "failed": item.get("failed", 0),
+                            **({"errors": item["errors"]} if item.get("errors") else {}),
                         }
                         for item in results
                     ]
@@ -1543,14 +1580,14 @@ def ingest_file(
 @app.command("file-to-source")
 def ingest_file_to_source(
     source_id: str,
-    file_patterns: list[str] = typer.Argument(
-        ...,
-        help="One or more files or glob patterns (e.g. '*.evtx', '/path/to/dir/**/*.log')",
+    file_patterns: list[str] | None = typer.Argument(
+        None,
+        help="One or more files or glob patterns; optional when --paths-file is set",
     ),
     paths_file: str | None = typer.Option(
         None,
         "--paths-file",
-        help="Text file with one file or glob pattern per line (supports $VARS and ~ per line)",
+        help="Text file with one file or glob pattern per line; positional patterns become optional",
     ),
     plugin: str | None = typer.Option(
         None,
@@ -1603,7 +1640,7 @@ def ingest_file_to_source(
 
     unique_files = [
         str(path)
-        for path, _base_dir in _expand_source_patterns(file_patterns, paths_file)
+        for path, _base_dir in _expand_source_patterns(file_patterns or [], paths_file)
     ]
     if not unique_files:
         print_error("No files found matching the provided patterns.")
@@ -1791,6 +1828,7 @@ def ingest_file_to_source(
                             "ingested": item.get("ingested", 0),
                             "skipped": item.get("skipped", 0),
                             "failed": item.get("failed", 0),
+                            **({"errors": item["errors"]} if item.get("errors") else {}),
                         }
                         for item in results
                     ]

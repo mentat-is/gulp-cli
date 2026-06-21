@@ -18,11 +18,27 @@ def test_ingest_file_paths_file_option_defaults_to_unset() -> None:
     assert paths_file_default.default is None
 
 
+def test_ingest_file_patterns_argument_defaults_to_unset() -> None:
+    file_patterns_default = inspect.signature(ingest_file).parameters[
+        "file_patterns"
+    ].default
+    assert file_patterns_default.default is None
+    assert "--paths-file" in file_patterns_default.help
+
+
 def test_ingest_file_to_source_paths_file_option_defaults_to_unset() -> None:
     paths_file_default = inspect.signature(ingest_file_to_source).parameters[
         "paths_file"
     ].default
     assert paths_file_default.default is None
+
+
+def test_ingest_file_to_source_patterns_argument_defaults_to_unset() -> None:
+    file_patterns_default = inspect.signature(ingest_file_to_source).parameters[
+        "file_patterns"
+    ].default
+    assert file_patterns_default.default is None
+    assert "--paths-file" in file_patterns_default.help
 
 
 def test_expand_source_patterns_supports_ingest_paths_file(

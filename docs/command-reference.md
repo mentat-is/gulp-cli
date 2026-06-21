@@ -449,21 +449,21 @@ gulp-cli operation revoke-user my_investigation alice
 Ingest one or more files into an operation.
 
 ```bash
-gulp-cli ingest file OPERATION_ID PLUGIN FILE [FILE...] [OPTIONS]
+gulp-cli ingest file OPERATION_ID PLUGIN [FILE...] [OPTIONS]
 ```
 
 **Arguments:**
 
 - `OPERATION_ID` — Target operation
 - `PLUGIN` — Plugin name (e.g., `win_evtx`, `syslog`, `csv`)
-- `FILE` — File path or glob pattern (multiple allowed)
+- `FILE` — File path or glob pattern (multiple allowed; optional when `--paths-file` is set)
 
 **Options:**
 
 - `--context TEXT` — Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id` (default: `sdk_context`)
 - `--plugin-params TEXT` — JSON string with plugin parameters
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
-- `--paths-file PATH` — Text file with one file or glob pattern per line
+- `--paths-file PATH` — Text file with one file or glob pattern per line. When set, positional `FILE` arguments are optional and ignored if also provided.
 - `--reset-operation` — Delete and recreate the operation before ingest starts
 - `--create-operation` — Create operation automatically when it does not exist
 - `--preview` — Run preview-only ingestion (no persistence)
@@ -510,20 +510,20 @@ gulp-cli ingest file my_op win_evtx 'samples/win_evtx/*.evtx' --wait
 Add files to an existing source.
 
 ```bash
-gulp-cli ingest file-to-source SOURCE_ID FILE [FILE...] [OPTIONS]
+gulp-cli ingest file-to-source SOURCE_ID [FILE...] [OPTIONS]
 ```
 
 **Arguments:**
 
 - `SOURCE_ID` — Source ID
-- `FILE` — File path or glob pattern (multiple allowed)
+- `FILE` — File path or glob pattern (multiple allowed; optional when `--paths-file` is set)
 
 **Options:**
 
 - `--plugin TEXT` — Override the plugin associated with the source (requires `--plugin-params`)
 - `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults; required when `--plugin` is set, `{}` is allowed)
 - `--flt TEXT` — JSON object for GulpIngestionFilter
-- `--paths-file PATH` — Text file with one file or glob pattern per line
+- `--paths-file PATH` — Text file with one file or glob pattern per line. When set, positional `FILE` arguments are optional and ignored if also provided.
 - `--wait` — Wait for completion with progress
 - `--show-per-file-progress / --no-show-per-file-progress` — Show one line per completed file request in `--wait` mode (default: on)
 - `--timeout INTEGER` — Timeout in seconds for `--wait` mode

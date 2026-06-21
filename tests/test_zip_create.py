@@ -2,6 +2,7 @@ import inspect
 import os
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from gulp_cli.commands.ingest import (
     _expand_source_patterns,
     ingest_zip_create,
 )
+from gulp_cli.config import set_runtime_config_dir
 
 
 def test_ingest_zip_create_split_size_defaults_to_unset() -> None:
@@ -140,6 +142,41 @@ def test_build_zip_from_sources_prints_directory_entries(
 
     with zipfile.ZipFile(created_archives[0]) as archive:
         assert archive.namelist() == archived_entries
+
+
+def test_build_zip_from_sources_uses_config_dir_for_temp_files(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_file = tmp_path / "sample.txt"
+    source_file.write_text("payload", encoding="utf-8")
+    output_zip = tmp_path / "out.zip"
+    config_dir = tmp_path / "config"
+    captured: dict[str, Path | None] = {"dir": None}
+    original_tempdir = tempfile.TemporaryDirectory
+
+    class _CapturingTemporaryDirectory:
+        def __init__(self, *args, **kwargs) -> None:
+            temp_dir = kwargs.get("dir")
+            captured["dir"] = Path(temp_dir) if temp_dir is not None else None
+            self._ctx = original_tempdir(*args, **kwargs)
+
+        def __enter__(self):
+            return self._ctx.__enter__()
+
+        def __exit__(self, exc_type, exc, tb):
+            return self._ctx.__exit__(exc_type, exc, tb)
+
+    set_runtime_config_dir(config_dir)
+    monkeypatch.setattr(
+        "gulp_cli.commands.ingest.tempfile.TemporaryDirectory",
+        _CapturingTemporaryDirectory,
+    )
+    try:
+        _build_zip_from_sources(output_zip, [(source_file, tmp_path)])
+    finally:
+        set_runtime_config_dir(None)
+
+    assert captured["dir"] == config_dir.resolve()
 
 
 def test_build_zip_from_sources_uses_multipart_zip_for_split_size(

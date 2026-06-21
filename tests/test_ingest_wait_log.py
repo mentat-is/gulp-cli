@@ -108,7 +108,7 @@ def test_ingest_ws_tracker_marks_failures_obviously(capsys) -> None:
             type=WSMessageType.ERROR.value,
             req_id="req12345",
             timestamp_msec=0,
-            data={"obj": {"status": "failed"}},
+            data={"obj": {"status": "failed", "message": "backend rejected file"}},
         )
     )
 
@@ -116,6 +116,7 @@ def test_ingest_ws_tracker_marks_failures_obviously(capsys) -> None:
     assert "FAILED!" in out
     assert "req12345" in out
     assert "sample.txt" in out
+    assert "backend rejected file" in out
 
 
 @pytest.mark.asyncio
@@ -215,3 +216,43 @@ async def test_ingest_ws_tracker_keeps_failed_terminal_status_after_source_done(
 
     assert result["status"] == "failed"
     assert result["failed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_ws_tracker_returns_errors_for_failed_stats() -> None:
+    class _FakeWs:
+        def on_message(self, *_args, **_kwargs) -> None:
+            pass
+
+        def off_message(self, *_args, **_kwargs) -> None:
+            pass
+
+    tracker = _IngestWsTracker(
+        _FakeWs(),
+        request_label_getter=lambda _req_id: "/tmp/sample.txt",
+    )
+
+    wait_task = asyncio.create_task(
+        tracker.wait_for_terminal("/tmp/sample.txt", "req12345", timeout=1)
+    )
+
+    tracker._on_message(  # noqa: SLF001
+        WSMessage(
+            type=WSMessageType.STATS_UPDATE.value,
+            req_id="req12345",
+            timestamp_msec=0,
+            data={
+                "obj": {
+                    "status": "failed",
+                    "data": {"errors": ["parser failed"]},
+                    "records_failed": 1,
+                }
+            },
+        )
+    )
+
+    result = await wait_task
+    tracker.close()
+
+    assert result["status"] == "failed"
+    assert result["errors"] == ["parser failed"]
