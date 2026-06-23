@@ -94,6 +94,61 @@ def test_build_zip_from_sources_preserves_path_when_requested(
         assert archive.namelist() == ["samples/nested/data.json"]
 
 
+@pytest.mark.parametrize(
+    "rel_path",
+    ["./samples/nested/data.json", ".\\samples\\nested\\data.json"],
+)
+def test_build_zip_from_sources_strips_current_dir_paths_when_preserving(
+    tmp_path: Path, monkeypatch, rel_path: str
+) -> None:
+    source_file = tmp_path / "data.json"
+    source_file.write_text('{"value": 1}', encoding="utf-8")
+    monkeypatch.setattr(
+        "gulp_cli.commands.ingest.os.path.relpath",
+        lambda _source_path, _cwd: rel_path,
+    )
+
+    output_zip = tmp_path / "out.zip"
+    archived_count, archived_entries, created_archives = _build_zip_from_sources(
+        output_zip,
+        [(source_file, tmp_path)],
+        preserve_path=True,
+    )
+
+    expected = "samples/nested/data.json"
+    assert archived_count == 1
+    assert archived_entries == [expected]
+
+    with zipfile.ZipFile(created_archives[0]) as archive:
+        assert archive.namelist() == [expected]
+
+
+def test_build_zip_from_sources_strips_parent_paths_when_preserving(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source_dir = tmp_path / "samples" / "win_evtx"
+    source_dir.mkdir(parents=True)
+    source_file = source_dir / "2-system-Microsoft-Windows-LiveId%4Operational.evtx"
+    source_file.write_text("payload", encoding="utf-8")
+    cwd = tmp_path / "a" / "b" / "c"
+    cwd.mkdir(parents=True)
+    monkeypatch.chdir(cwd)
+
+    output_zip = tmp_path / "out.zip"
+    archived_count, archived_entries, created_archives = _build_zip_from_sources(
+        output_zip,
+        [(source_file, source_dir.parent)],
+        preserve_path=True,
+    )
+
+    expected = "samples/win_evtx/2-system-Microsoft-Windows-LiveId%4Operational.evtx"
+    assert archived_count == 1
+    assert archived_entries == [expected]
+
+    with zipfile.ZipFile(created_archives[0]) as archive:
+        assert archive.namelist() == [expected]
+
+
 def test_build_zip_from_sources_prints_file_progress(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

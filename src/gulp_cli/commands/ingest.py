@@ -297,18 +297,26 @@ def _build_zip_from_sources(
     total_entries = 0
     entries_added = 0
 
+    def _safe_archive_name(path: str) -> str:
+        """Return a ZIP entry path without dot-directory components."""
+        return "/".join(
+            part
+            for part in path.replace("\\", "/").split("/")
+            if part not in ("", ".", "..")
+        )
+
     def _archive_name_for_path(source_path: Path, base_dir: Path) -> str:
         if preserve_path:
             try:
                 rel_path = os.path.relpath(source_path, Path.cwd())
             except ValueError:
                 rel_path = source_path.name
-            return Path(rel_path).as_posix()
+            return _safe_archive_name(rel_path)
         try:
             rel_path = source_path.relative_to(base_dir)
         except ValueError:
             rel_path = source_path.name
-        return rel_path.as_posix()
+        return _safe_archive_name(rel_path.as_posix())
 
     planned_entries: list[tuple[Path, Path, str]] = []
     for source_path, base_dir in sources:
