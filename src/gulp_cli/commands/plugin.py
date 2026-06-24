@@ -4,7 +4,6 @@ Plugin management commands for Gulp CLI.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any, Literal
 
 import typer
@@ -79,72 +78,5 @@ def plugin_list_ui(
                 items,
                                 formatter=lambda data: print_records(data, title="Available UI Plugins")
             )
-
-    asyncio.run(_run())
-
-
-@app.command("upload")
-def plugin_upload(
-    file_path: str = typer.Argument(..., help="Path to the plugin .py file"),
-    plugin_type: Literal["default", "extension", "ui"] = typer.Option(
-        "default", "--type", help="Plugin type category"
-    ),
-    fail_if_exists: bool = typer.Option(
-        False, "--fail-if-exists", help="Fail if plugin file already exists"
-    ),
-) -> None:
-    """Upload a plugin file."""
-    async def _run() -> None:
-        # Check file exists
-        p = Path(file_path)
-        if not p.exists():
-            typer.echo(f"Error: File not found: {file_path}", err=True)
-            raise typer.Exit(1)
-
-        async with get_client() as client:
-            result = await client.plugins.upload(
-                file_path,
-                plugin_type=plugin_type,
-                fail_if_exists=fail_if_exists,
-            )
-            print_result(result)
-
-    asyncio.run(_run())
-
-
-@app.command("delete")
-def plugin_delete(
-    filename: str = typer.Argument(..., help="Plugin filename to delete, e.g., 'my_plugin.py'"),
-    plugin_type: Literal["default", "extension", "ui"] = typer.Option(
-        "default", "--type", help="Plugin type category"
-    ),
-) -> None:
-    """Delete a plugin file."""
-    async def _run() -> None:
-        async with get_client() as client:
-            result = await client.plugins.delete(filename, plugin_type=plugin_type)
-            print_result(result)
-
-    asyncio.run(_run())
-
-
-@app.command("download")
-def plugin_download(
-    filename: str = typer.Argument(..., help="Plugin filename to download, e.g., 'my_plugin.py'"),
-    output_path: str = typer.Argument(..., help="Local path to save the plugin"),
-    plugin_type: Literal["default", "extension", "ui"] = typer.Option(
-        "default", "--type", help="Plugin type category"
-    ),
-) -> None:
-    """Download a plugin file."""
-    async def _run() -> None:
-        async with get_client() as client:
-            result = await client.plugins.download(
-                filename,
-                output_path,
-                plugin_type=plugin_type,
-            )
-            data = {"file": result}
-            print_result(data)
 
     asyncio.run(_run())

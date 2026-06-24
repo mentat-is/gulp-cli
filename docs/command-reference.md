@@ -2302,32 +2302,6 @@ gulp-cli plugin list-ui [OPTIONS]
 
 ---
 
-#### `plugin upload`
-
-Upload a new plugin.
-
-```bash
-gulp-cli plugin upload PLUGIN_FILE [OPTIONS]
-```
-
-#### `plugin download`
-
-Download a plugin.
-
-```bash
-gulp-cli plugin download FILENAME OUTPUT_PATH [OPTIONS]
-```
-
-#### `plugin delete`
-
-Delete a plugin.
-
-```bash
-gulp-cli plugin delete FILENAME [OPTIONS]
-```
-
----
-
 #### `mapping list`
 
 List all mapping files.

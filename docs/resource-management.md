@@ -196,58 +196,6 @@ List available UI plugins:
 gulp plugin list-ui
 ```
 
-### Upload Plugin
-
-Upload a custom plugin:
-
-```bash
-# Upload as default plugin
-gulp plugin upload /path/to/my_plugin.py
-
-# Upload as extension plugin
-gulp plugin upload /path/to/my_extension.py --type extension
-
-# Upload as UI plugin
-gulp plugin upload /path/to/my_ui_plugin.py --type ui
-
-# Fail if already exists
-gulp plugin upload /path/to/my_plugin.py --fail-if-exists
-```
-
-Response includes the file path where the plugin was saved on the server.
-
-### Download Plugin
-
-Download a plugin from the server:
-
-```bash
-# Download default plugin
-gulp plugin download win_evtx.py /local/path/win_evtx.py
-
-# Download extension plugin
-gulp plugin download my_extension.py /path/to/save --type extension
-
-# Download UI plugin
-gulp plugin download my_ui.py /path/to/save --type ui
-```
-
-### Delete Plugin
-
-Delete a plugin from the server:
-
-```bash
-# Delete default plugin
-gulp plugin delete my_plugin.py
-
-# Delete extension plugin
-gulp plugin delete my_extension.py --type extension
-
-# Delete UI plugin
-gulp plugin delete my_ui.py --type ui
-```
-
----
-
 ## Mapping File Management
 
 Mapping files define data transformations and field mappings for ingestion plugins.
