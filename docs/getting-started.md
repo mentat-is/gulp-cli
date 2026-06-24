@@ -207,11 +207,11 @@ This shows a real-time progress bar while documents are being ingested. Per-file
 gulp-cli ingest file-to-source existing-source-id /gulp/samples/win_evtx/Security.evtx --wait
 ```
 
-### Ingest ZIP / Raw Data
+### Compressed / Raw Data
 
 ```bash
-# ZIP archive ingestion
-gulp-cli ingest zip my_investigation /path/to/evidence.zip --wait
+# Compress locally with bzip2 before upload; the backend decompresses before ingestion
+gulp-cli ingest file my_investigation win_evtx /path/to/System.evtx --plugin-params '{"compressed": true}' --wait
 
 # Raw payload ingestion from a file
 gulp-cli ingest raw my_investigation --data-file /tmp/raw_chunk.json --last --wait

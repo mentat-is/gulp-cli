@@ -461,7 +461,7 @@ gulp-cli ingest file OPERATION_ID PLUGIN [FILE...] [OPTIONS]
 **Options:**
 
 - `--context TEXT` — Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id` (default: `sdk_context`)
-- `--plugin-params TEXT` — JSON string with plugin parameters
+- `--plugin-params TEXT` — JSON string with plugin parameters. When it includes `"compressed": true`, gulp-cli bzip2-compresses each input file before upload and the backend decompresses it before plugin ingestion.
 - `--flt TEXT` — JSON object for `GulpIngestionFilter`
 - `--paths-file PATH` — Text file with one file or glob pattern per line. When set, positional `FILE` arguments are optional and ignored if also provided.
 - `--reset-operation` — Delete and recreate the operation before ingest starts
@@ -493,6 +493,9 @@ gulp-cli ingest file my_op win_evtx --paths-file /tmp/file_paths.txt
 # With plugin parameters
 gulp-cli ingest file my_op csv file.csv --plugin-params '{"delimiter":";","encoding":"utf-8"}'
 
+# Compress before upload and let the backend decompress before ingestion
+gulp-cli ingest file my_op win_evtx /path/to/System.evtx --plugin-params '{"compressed": true}'
+
 # Preview mode (no ingestion persisted)
 gulp-cli ingest file my_op win_evtx /path/to/System.evtx --preview
 
@@ -521,7 +524,7 @@ gulp-cli ingest file-to-source SOURCE_ID [FILE...] [OPTIONS]
 **Options:**
 
 - `--plugin TEXT` — Override the plugin associated with the source (requires `--plugin-params`)
-- `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults; required when `--plugin` is set, `{}` is allowed)
+- `--plugin-params TEXT` — JSON object for plugin_params (overrides source defaults; required when `--plugin` is set, `{}` is allowed). When it includes `"compressed": true`, gulp-cli bzip2-compresses each input file before upload and the backend decompresses it before plugin ingestion.
 - `--flt TEXT` — JSON object for GulpIngestionFilter
 - `--paths-file PATH` — Text file with one file or glob pattern per line. When set, positional `FILE` arguments are optional and ignored if also provided.
 - `--wait` — Wait for completion with progress
@@ -536,38 +539,7 @@ gulp-cli ingest file-to-source source123 /new/System.evtx --wait
 gulp-cli ingest file-to-source source123 '/new/*.evtx'
 gulp-cli ingest file-to-source source123 --paths-file /tmp/file_paths.txt
 gulp-cli ingest file-to-source source123 /new/events.json --plugin json --plugin-params '{"mapping_parameters": {}}'
-```
-
----
-
-#### `zip`
-
-Ingest from a ZIP archive.
-
-> TO BE DEPRECATED...
-
-```bash
-gulp-cli ingest zip OPERATION_ID ZIP_FILE [OPTIONS]
-```
-
-**Arguments:**
-
-- `OPERATION_ID` — Target operation
-- `ZIP_FILE` — Path to ZIP file containing a `metadata.json` in the root, describing the content as specified in gulp's `ingest_zip` docs.
-
-**Options:**
-
-- `--context TEXT` — Context for ingestion, specify a name to create a new context if it doesn't exist, or an existing `context_id` (default: `sdk_context`)
-- `--flt TEXT` — JSON object for `GulpIngestionFilter`
-- `--create-operation` — Create operation automatically when it does not exist
-- `--wait` — Wait for completion
-- `--timeout INTEGER` — Timeout in seconds for `--wait` mode
-
-**Examples:**
-
-```bash
-gulp-cli ingest zip my_op /data/evidence.zip --wait
-gulp-cli ingest zip my_op /data/evidence.zip --create-operation
+gulp-cli ingest file-to-source source123 /new/System.evtx --plugin win_evtx --plugin-params '{"compressed": true}'
 ```
 
 ---

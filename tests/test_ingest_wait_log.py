@@ -10,7 +10,6 @@ from gulp_cli.commands.ingest import (
     ingest_file,
     ingest_file_to_source,
     ingest_raw,
-    ingest_zip,
 )
 from gulp_sdk.websocket import WSMessage, WSMessageType
 
@@ -32,16 +31,6 @@ def test_ingest_file_to_source_exposes_plugin_option() -> None:
         "plugin"
     ].default
     assert plugin_default.param_decls == ("--plugin",)
-
-
-def test_ingest_zip_exposes_wait_log_option() -> None:
-    wait_log_default = inspect.signature(ingest_zip).parameters["wait_log"].default
-    assert wait_log_default.default is False
-
-
-def test_ingest_zip_exposes_context_option() -> None:
-    context_default = inspect.signature(ingest_zip).parameters["context_name"].default
-    assert context_default.param_decls == ("--context",)
 
 
 def test_ingest_raw_exposes_wait_log_option() -> None:

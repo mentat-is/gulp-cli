@@ -8,7 +8,7 @@
     - [CSV Data Ingestion with Custom Parameters](#csv-data-ingestion-with-custom-parameters)
     - [JSON Logs Ingestion](#json-logs-ingestion)
     - [Add More Evidence to Existing Source](#add-more-evidence-to-existing-source)
-    - [ZIP Archive Ingestion](#zip-archive-ingestion)
+    - [Compressed File Ingestion](#compressed-file-ingestion)
     - [Create ZIP Archive from Paths and Masks](#create-zip-archive-from-paths-and-masks)
     - [Raw Payload Ingestion](#raw-payload-ingestion)
   - [Request Stats Monitoring Workflows](#request-stats-monitoring-workflows)
@@ -205,14 +205,12 @@ gulp-cli ingest file-to-source data-2026-001 /additional/evidence.evtx --wait
 gulp-cli ingest file-to-source data-2026-001 '/additional/*.evtx' --wait
 ```
 
-### ZIP Archive Ingestion
+### Compressed File Ingestion
 
 ```bash
-# Ingest prepared ZIP evidence archive
-gulp-cli ingest zip incident-001 /evidence/evidence.zip --wait
-
-# Auto-create operation when missing
-gulp-cli ingest zip incident-001 /evidence/evidence.zip --create-operation
+# Compress files with bzip2 before upload; the backend decompresses before ingestion
+gulp-cli ingest file incident-001 win_evtx /evidence/System.evtx \
+  --plugin-params '{"compressed": true}' --wait
 ```
 
 ### Create ZIP Archive from Paths and Masks
@@ -233,9 +231,6 @@ $CASE_ROOT/linux/**/*.log
 EOF
 
 gulp-cli ingest zip-create '$CASE_ROOT/evidence.zip' --paths-file /tmp/evidence_paths.txt --overwrite
-
-# Then ingest the generated ZIP
-gulp-cli ingest zip incident-001 '$CASE_ROOT/evidence.zip' --wait
 ```
 
 ### Raw Payload Ingestion

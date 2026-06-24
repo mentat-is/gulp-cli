@@ -5,7 +5,7 @@
 ## ✨ What can you do?
 
 - 🔐 **Authentication** — secure login with token persistence
-- 📥 **Ingestion** — ingest files (single/batch/wildcard), zip archives, with concurrent uploads
+- 📥 **Ingestion** — ingest files (single/batch/wildcard), optionally compressed before upload, with concurrent uploads
 - 🔍 **Querying** — raw OpenSearch queries, Sigma rules, external plugins
 - 🏷️ **Enrichment** — enrich documents, tag/untag, update fields
 - 👥 **User Management** — create users, manage permissions (admin only)

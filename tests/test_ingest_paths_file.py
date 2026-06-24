@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import bz2
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,8 @@ import typer
 
 from gulp_cli.commands.ingest import (
     _expand_source_patterns,
+    _maybe_bz2_compress_file_for_ingestion,
+    _plugin_params_request_compression,
     ingest_file_to_source,
     ingest_file,
 )
@@ -76,3 +80,36 @@ def test_expand_source_patterns_rejects_binary_paths_file(tmp_path: Path) -> Non
 
     with pytest.raises(typer.BadParameter, match="must be UTF-8 text"):
         _expand_source_patterns([], str(paths_file))
+
+
+def test_compressed_plugin_params_create_bz2_upload_file(tmp_path: Path) -> None:
+    source = tmp_path / "sample.evtx"
+    payload = b"event log bytes"
+    source.write_bytes(payload)
+
+    assert _plugin_params_request_compression({"compressed": True})
+    upload_path, temp_path = asyncio.run(
+        _maybe_bz2_compress_file_for_ingestion(
+            str(source), {"compressed": True}
+        )
+    )
+    try:
+        assert temp_path == upload_path
+        assert upload_path.endswith(".bz2")
+        with bz2.open(upload_path, "rb") as f:
+            assert f.read() == payload
+    finally:
+        Path(upload_path).unlink(missing_ok=True)
+
+
+def test_uncompressed_plugin_params_keep_original_upload_file(tmp_path: Path) -> None:
+    source = tmp_path / "sample.evtx"
+    source.write_bytes(b"event log bytes")
+
+    assert not _plugin_params_request_compression({})
+    upload_path, temp_path = asyncio.run(
+        _maybe_bz2_compress_file_for_ingestion(str(source), {})
+    )
+
+    assert upload_path == str(source)
+    assert temp_path is None

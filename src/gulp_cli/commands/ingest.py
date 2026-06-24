@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import bz2
 import json
 import os
 import re
@@ -43,6 +44,43 @@ app = typer.Typer(help="Ingestion commands")
 _WS_CONFIRM_TIMEOUT_SEC = 30.0
 _TERMINAL_STATUSES = {"done", "failed", "canceled"}
 _MAX_ZIP_PART_SIZE_BYTES = 4 * 1024**3 - 1
+
+
+def _plugin_params_request_compression(plugin_params: dict[str, Any] | None) -> bool:
+    """Return True when plugin parameters request core decompression."""
+    return bool(plugin_params and plugin_params.get("compressed"))
+
+
+def _bz2_compress_file_for_ingestion_sync(file_path: str) -> str:
+    """Compress a file into a temporary bzip2 file for upload."""
+    source_path = Path(file_path)
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f"{source_path.name}.",
+        suffix=".bz2",
+    )
+    os.close(fd)
+
+    try:
+        with open(source_path, "rb") as src, bz2.open(temp_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+    except Exception:
+        try:
+            Path(temp_path).unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+    return temp_path
+
+
+async def _maybe_bz2_compress_file_for_ingestion(
+    file_path: str, plugin_params: dict[str, Any] | None
+) -> tuple[str, str | None]:
+    """Return an upload path and optional temporary path to delete after upload."""
+    if not _plugin_params_request_compression(plugin_params):
+        return file_path, None
+    temp_path = await asyncio.to_thread(_bz2_compress_file_for_ingestion_sync, file_path)
+    return temp_path, temp_path
 
 
 def _default_ingest_batch_size() -> int:
@@ -1372,17 +1410,24 @@ def ingest_file(
             if preview:
                 previews: list[dict[str, Any]] = []
                 for file_path in unique_files:
-                    data = await client.ingest.preview(
-                        operation_id=operation_id,
-                        plugin_name=plugin,
-                        file_path=file_path,
-                        params={
-                            "context_name": context_name,
-                            "plugin_params": params["plugin_params"],
-                            "flt": params["flt"],
-                            "original_file_path": str(Path(file_path).resolve()),
-                        },
+                    upload_path, temp_path = await _maybe_bz2_compress_file_for_ingestion(
+                        file_path, params["plugin_params"]
                     )
+                    try:
+                        data = await client.ingest.preview(
+                            operation_id=operation_id,
+                            plugin_name=plugin,
+                            file_path=upload_path,
+                            params={
+                                "context_name": context_name,
+                                "plugin_params": params["plugin_params"],
+                                "flt": params["flt"],
+                                "original_file_path": str(Path(file_path).resolve()),
+                            },
+                        )
+                    finally:
+                        if temp_path:
+                            Path(temp_path).unlink(missing_ok=True)
                     previews.append({"file": file_path, "preview": data})
                 print_result(previews)
                 return
@@ -1408,18 +1453,25 @@ def ingest_file(
                 """Submit ingestion for one file; returns (file_path, req_id, submission)."""
                 req_id = str(uuid.uuid4())
                 req_to_file[req_id] = file_path
-                result = await client.ingest.file(
-                    operation_id=operation_id,
-                    plugin_name=plugin,
-                    file_path=file_path,
-                    context_name=context_name,
-                    params={
-                        **params,
-                        "original_file_path": str(Path(file_path).resolve()),
-                        "req_id": req_id,
-                    },
-                    wait=False,  # we handle waiting ourselves below
+                upload_path, temp_path = await _maybe_bz2_compress_file_for_ingestion(
+                    file_path, params["plugin_params"]
                 )
+                try:
+                    result = await client.ingest.file(
+                        operation_id=operation_id,
+                        plugin_name=plugin,
+                        file_path=upload_path,
+                        context_name=context_name,
+                        params={
+                            **params,
+                            "original_file_path": str(Path(file_path).resolve()),
+                            "req_id": req_id,
+                        },
+                        wait=False,  # we handle waiting ourselves below
+                    )
+                finally:
+                    if temp_path:
+                        Path(temp_path).unlink(missing_ok=True)
                 if hasattr(result, "model_dump"):
                     submission = result.model_dump(exclude_none=True)
                 else:
@@ -1705,19 +1757,27 @@ def ingest_file_to_source(
             async def _fire_one(file_path: str) -> tuple[str, str, dict[str, Any]]:
                 req_id = str(uuid.uuid4())
                 req_to_file[req_id] = file_path
-                result = await client.ingest.file_to_source(
-                    source_id=source_id,
-                    file_path=file_path,
-                    plugin=plugin,
-                    plugin_params=(
-                        params["plugin_params"]
-                        if plugin is not None
-                        else params["plugin_params"] or None
-                    ),
-                    flt=params["flt"] or None,
-                    req_id=req_id,
-                    wait=False,
+                upload_path, temp_path = await _maybe_bz2_compress_file_for_ingestion(
+                    file_path, params["plugin_params"]
                 )
+                try:
+                    result = await client.ingest.file_to_source(
+                        source_id=source_id,
+                        file_path=upload_path,
+                        plugin=plugin,
+                        plugin_params=(
+                            params["plugin_params"]
+                            if plugin is not None
+                            else params["plugin_params"] or None
+                        ),
+                        flt=params["flt"] or None,
+                        req_id=req_id,
+                        original_file_path=str(Path(file_path).resolve()),
+                        wait=False,
+                    )
+                finally:
+                    if temp_path:
+                        Path(temp_path).unlink(missing_ok=True)
                 if hasattr(result, "model_dump"):
                     submission = result.model_dump(exclude_none=True)
                 else:
@@ -1890,145 +1950,6 @@ def ingest_file_to_source(
                     ]
 
             print_result(results)
-
-    asyncio.run(_run())
-
-
-@app.command("zip")
-def ingest_zip(
-    operation_id: str,
-    zip_file: str = typer.Argument(
-        ...,
-        help="Path to a ZIP file which must contain a `metadata.json` in the root, describing the content as specified in gulp's `ingest_zip` docs.",
-    ),
-    context_name: str = typer.Option(
-        "sdk_context",
-        "--context",
-        help=(
-            "Context for ingestion, specify a name to create a new context if it "
-            "doesn't exist, or an existing `context_id`."
-        ),
-    ),
-    flt: str | None = typer.Option(
-        None, "--flt", help="JSON object for GulpIngestionFilter"
-    ),
-    reset_operation: bool = typer.Option(
-        False,
-        "--reset-operation",
-        help="Delete and recreate the operation before ingest starts",
-    ),
-    create_operation_if_missing: bool = typer.Option(
-        False,
-        "--create-operation",
-        help="Create operation automatically when it does not exist",
-    ),
-    wait: bool = typer.Option(False, "--wait", help="Wait for ingestion completion"),
-    wait_log: bool = typer.Option(
-        False,
-        "--wait-log",
-        help="Wait for ingestion completion and print websocket updates as they arrive.",
-    ),
-    wait_timeout: int = typer.Option(
-        300,
-        "--timeout",
-        help="Seconds to wait for completion (only used with --wait/--wait-log)",
-    ),
-) -> None:
-    """Ingest a ZIP archive into an operation."""
-
-    async def _run() -> None:
-        if reset_operation and create_operation_if_missing:
-            raise typer.BadParameter(
-                "--reset-operation and --create-operation are mutually exclusive"
-            )
-        if wait and wait_log:
-            raise typer.BadParameter("--wait and --wait-log are mutually exclusive")
-        wait_mode = wait or wait_log
-
-        async with get_client() as client:
-            await client.ensure_websocket()
-
-            async def _fetch_request_status(req_id: str) -> dict[str, Any] | None:
-                try:
-                    resp = await client._request(
-                        "GET", "/request_get_by_id", params={"obj_id": req_id}
-                    )
-                except Exception:
-                    return None
-                data = resp.get("data")
-                return data if isinstance(data, dict) else None
-
-            if reset_operation:
-                await client.operations.delete(operation_id, force=True)
-                await client.operations.create(name=operation_id)
-                if not get_runtime_verbose():
-                    print_warning(
-                        f"Operation {operation_id} reset (deleted and recreated)."
-                    )
-            else:
-                await _ensure_operation_exists(
-                    client,
-                    operation_id,
-                    create_if_missing=create_operation_if_missing,
-                )
-
-            params = {
-                "context_name": context_name,
-                "flt": parse_json_option(flt, field_name="flt") or {},
-            }
-            req_to_label: dict[str, str] = {}
-            tracker = await _IngestWsTracker.create(
-                client,
-                source_done_is_terminal=True,
-                log_updates=wait_log,
-                request_label_getter=lambda req_id: req_to_label.get(req_id, zip_file),
-                request_status_fetcher=_fetch_request_status,
-            )
-            result = await client.ingest.zip(
-                operation_id=operation_id,
-                plugin_name="zip",
-                zipfile_path=zip_file,
-                params=params,
-                wait=False,
-            )
-
-            if hasattr(result, "model_dump"):
-                submission = result.model_dump(exclude_none=True)
-            else:
-                submission = {"req_id": getattr(result, "req_id", None)}
-
-            req_id = str(submission.get("req_id") or "")
-            if not req_id:
-                # Fallback: if backend did not return req_id, surface submission as-is.
-                print_result(submission)
-                return
-
-            req_to_label[req_id] = zip_file
-            file_req_map: dict[str, str] = {zip_file: req_id}
-
-            if wait_mode:
-                waited = await tracker.wait_for_terminal(zip_file, req_id, wait_timeout)
-                print_result(waited)
-            else:
-                timed_out = await _wait_for_stats_create(client, [req_id])
-                if timed_out and not get_runtime_verbose():
-                    print_warning(
-                        f"Request did not receive STATS_CREATE within {_WS_CONFIRM_TIMEOUT_SEC:.0f}s - backend may still be processing: {req_id}"
-                    )
-
-                if get_runtime_verbose():
-                    print_result(
-                        {
-                            "file": zip_file,
-                            "req_id": req_id,
-                            "submitted": submission,
-                            "ws_confirmed": req_id not in timed_out,
-                        }
-                    )
-                else:
-                    print_result(
-                        {"file": zip_file, "req_id": req_id, "status": "pending"}
-                    )
 
     asyncio.run(_run())
 
