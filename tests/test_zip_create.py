@@ -12,6 +12,7 @@ import typer
 from gulp_cli.commands.ingest import (
     _build_zip_from_sources,
     _expand_source_patterns,
+    _safe_archive_name,
     ingest_zip_create,
 )
 from gulp_cli.config import set_runtime_config_dir
@@ -87,40 +88,27 @@ def test_build_zip_from_sources_preserves_path_when_requested(
     )
 
     assert archived_count == 1
-    assert archived_entries == ["samples/nested/data.json"]
+    assert archived_entries == [_safe_archive_name(str(source_file.resolve()))]
     assert len(created_archives) == 1
 
     with zipfile.ZipFile(created_archives[0]) as archive:
-        assert archive.namelist() == ["samples/nested/data.json"]
+        assert archive.namelist() == archived_entries
 
 
 @pytest.mark.parametrize(
-    "rel_path",
-    ["./samples/nested/data.json", ".\\samples\\nested\\data.json"],
+    ("path", "expected"),
+    [
+        ("./samples/nested/data.json", "samples/nested/data.json"),
+        (".\\samples\\nested\\data.json", "samples/nested/data.json"),
+        ("../../../samples/nested/data.json", "samples/nested/data.json"),
+        ("C:\\samples\\nested\\data.json", "C/samples/nested/data.json"),
+        ("\\\\server\\share\\samples\\nested\\data.json", "server/share/samples/nested/data.json"),
+    ],
 )
-def test_build_zip_from_sources_strips_current_dir_paths_when_preserving(
-    tmp_path: Path, monkeypatch, rel_path: str
+def test_safe_archive_name_strips_roots_and_dot_paths(
+    path: str, expected: str
 ) -> None:
-    source_file = tmp_path / "data.json"
-    source_file.write_text('{"value": 1}', encoding="utf-8")
-    monkeypatch.setattr(
-        "gulp_cli.commands.ingest.os.path.relpath",
-        lambda _source_path, _cwd: rel_path,
-    )
-
-    output_zip = tmp_path / "out.zip"
-    archived_count, archived_entries, created_archives = _build_zip_from_sources(
-        output_zip,
-        [(source_file, tmp_path)],
-        preserve_path=True,
-    )
-
-    expected = "samples/nested/data.json"
-    assert archived_count == 1
-    assert archived_entries == [expected]
-
-    with zipfile.ZipFile(created_archives[0]) as archive:
-        assert archive.namelist() == [expected]
+    assert _safe_archive_name(path) == expected
 
 
 def test_build_zip_from_sources_strips_parent_paths_when_preserving(
@@ -141,7 +129,7 @@ def test_build_zip_from_sources_strips_parent_paths_when_preserving(
         preserve_path=True,
     )
 
-    expected = "samples/win_evtx/2-system-Microsoft-Windows-LiveId%4Operational.evtx"
+    expected = _safe_archive_name(str(source_file.resolve()))
     assert archived_count == 1
     assert archived_entries == [expected]
 

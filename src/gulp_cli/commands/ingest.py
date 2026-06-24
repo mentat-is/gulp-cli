@@ -280,6 +280,29 @@ def _resolve_glob_base(pattern_path: Path) -> Path:
     return base_dir.resolve()
 
 
+def _safe_archive_name(path: str) -> str:
+    """Return a ZIP entry path without roots or dot-directory components."""
+    return "/".join(
+        _zip_path_part(part)
+        for part in path.replace("\\", "/").split("/")
+        if part not in ("", ".", "..")
+    )
+
+
+def _zip_path_part(part: str) -> str:
+    if re.fullmatch(r"[A-Za-z]:", part):
+        return part[0]
+    return part
+
+
+def _preserved_archive_name(source_path: Path) -> str:
+    try:
+        absolute_path = source_path.resolve()
+    except OSError:
+        absolute_path = Path(os.path.abspath(source_path))
+    return _safe_archive_name(str(absolute_path))
+
+
 def _build_zip_from_sources(
     output_zip: Path,
     sources: list[tuple[Path, Path]],
@@ -297,21 +320,9 @@ def _build_zip_from_sources(
     total_entries = 0
     entries_added = 0
 
-    def _safe_archive_name(path: str) -> str:
-        """Return a ZIP entry path without dot-directory components."""
-        return "/".join(
-            part
-            for part in path.replace("\\", "/").split("/")
-            if part not in ("", ".", "..")
-        )
-
     def _archive_name_for_path(source_path: Path, base_dir: Path) -> str:
         if preserve_path:
-            try:
-                rel_path = os.path.relpath(source_path, Path.cwd())
-            except ValueError:
-                rel_path = source_path.name
-            return _safe_archive_name(rel_path)
+            return _preserved_archive_name(source_path)
         try:
             rel_path = source_path.relative_to(base_dir)
         except ValueError:
