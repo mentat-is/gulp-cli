@@ -7,6 +7,7 @@ import pytest
 
 from gulp_cli.commands.ingest import (
     _IngestWsTracker,
+    _print_ingestion_finished_marker,
     ingest_file,
     ingest_file_to_source,
     ingest_raw,
@@ -76,6 +77,7 @@ def test_ingest_ws_tracker_logs_updates_to_stdout(capsys) -> None:
     assert "req12345" in out
     assert "ingested=12" in out
     assert "skipped=1" in out
+    assert "GULP_MARKER: [MARKER_ONGOING_STATS_RECEIVED]" in out
 
 
 def test_ingest_ws_tracker_marks_failures_obviously(capsys) -> None:
@@ -106,6 +108,91 @@ def test_ingest_ws_tracker_marks_failures_obviously(capsys) -> None:
     assert "req12345" in out
     assert "sample.txt" in out
     assert "backend rejected file" in out
+    assert "GULP_MARKER: [MARKER_BACKEND_EXCEPTION_REPORTED]" in out
+    assert "GULP_MARKER: [MARKER_FAILED_STATS_RECEIVED]" in out
+
+
+def test_ingest_ws_tracker_marks_source_done(capsys) -> None:
+    class _FakeWs:
+        def on_message(self, *_args, **_kwargs) -> None:
+            pass
+
+        def off_message(self, *_args, **_kwargs) -> None:
+            pass
+
+    tracker = _IngestWsTracker(
+        _FakeWs(),
+        log_updates=True,
+        request_label_getter=lambda _req_id: "/tmp/sample.txt",
+    )
+
+    tracker._on_message(  # noqa: SLF001
+        WSMessage(
+            type=WSMessageType.INGEST_SOURCE_DONE.value,
+            req_id="req12345",
+            timestamp_msec=0,
+            data={"obj": {"status": "done", "records_ingested": 3}},
+        )
+    )
+
+    out = capsys.readouterr().out
+    assert "GULP_MARKER: [MARKER_INGEST_SOURCE_DONE_RECEIVED]" in out
+    assert '"ingested": 3' in out
+
+
+@pytest.mark.parametrize(
+    ("status", "marker"),
+    [
+        ("done", "GULP_MARKER: [MARKER_DONE_STATS_RECEIVED]"),
+        ("failed", "GULP_MARKER: [MARKER_FAILED_STATS_RECEIVED]"),
+    ],
+)
+def test_ingest_ws_tracker_marks_terminal_stats(
+    status: str, marker: str, capsys
+) -> None:
+    class _FakeWs:
+        def on_message(self, *_args, **_kwargs) -> None:
+            pass
+
+        def off_message(self, *_args, **_kwargs) -> None:
+            pass
+
+    tracker = _IngestWsTracker(
+        _FakeWs(),
+        log_updates=True,
+        request_label_getter=lambda _req_id: "/tmp/sample.txt",
+    )
+
+    tracker._on_message(  # noqa: SLF001
+        WSMessage(
+            type=WSMessageType.STATS_UPDATE.value,
+            req_id="req12345",
+            timestamp_msec=0,
+            data={"obj": {"status": status}},
+        )
+    )
+
+    assert marker in capsys.readouterr().out
+
+
+def test_ingestion_finished_marker(capsys) -> None:
+    _print_ingestion_finished_marker(
+        [
+            {"status": "done", "ingested": 10, "skipped": 2, "failed": 1},
+            {"status": "failed", "ingested": 3, "skipped": 0, "failed": 4},
+            {"status": "timeout"},
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert "GULP_MARKER: [MARKER_INGESTION_FINISHED]" in out
+    assert '"requests_total": 3' in out
+    assert '"requests_done": 1' in out
+    assert '"requests_failed": 1' in out
+    assert '"requests_timeout": 1' in out
+    assert '"ingested": 13' in out
+    assert '"skipped": 2' in out
+    assert '"failed": 5' in out
 
 
 @pytest.mark.asyncio

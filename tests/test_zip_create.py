@@ -158,6 +158,8 @@ def test_build_zip_from_sources_prints_file_progress(
     assert "1/1" in captured
     assert "100%" in captured
     assert "bytes ->" in captured
+    assert "GULP_MARKER: [MARKER_FILE_ADDED_TO_ZIP]" in captured
+    assert "GULP_MARKER: [MARKER_ZIP_CREATED_SUCCESSFULLY]" in captured
 
 
 def test_build_zip_from_sources_prints_directory_entries(
@@ -182,9 +184,33 @@ def test_build_zip_from_sources_prints_directory_entries(
     assert "samples/nested/" in captured
     assert "samples/nested/sample.txt" in captured
     assert "2/2" in captured
+    assert captured.count("GULP_MARKER: [MARKER_FILE_ADDED_TO_ZIP]") == 2
 
     with zipfile.ZipFile(created_archives[0]) as archive:
         assert archive.namelist() == archived_entries
+
+
+def test_ingest_zip_create_marks_errors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source_file = tmp_path / "sample.txt"
+    source_file.write_text("payload", encoding="utf-8")
+    output_zip = tmp_path / "out.zip"
+    output_zip.write_text("existing", encoding="utf-8")
+
+    with pytest.raises(typer.BadParameter):
+        ingest_zip_create(
+            str(output_zip),
+            [str(source_file)],
+            None,
+            True,
+            False,
+            None,
+        )
+
+    captured = capsys.readouterr().out
+    assert "GULP_MARKER: [MARKER_ZIP_CREATE_ERROR]" in captured
+    assert "GULP_MARKER: [MARKER_OTHER_ERROR]" in captured
 
 
 def test_build_zip_from_sources_uses_config_dir_for_temp_files(

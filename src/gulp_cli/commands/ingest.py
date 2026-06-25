@@ -46,6 +46,31 @@ _TERMINAL_STATUSES = {"done", "failed", "canceled"}
 _MAX_ZIP_PART_SIZE_BYTES = 4 * 1024**3 - 1
 
 
+def _print_marker(marker: str, **payload: Any) -> None:
+    console.print(
+        f"GULP_MARKER: {marker} | {json.dumps(payload, sort_keys=True, default=str)}",
+        markup=False,
+        highlight=False,
+        soft_wrap=True,
+    )
+
+
+def _print_ingestion_finished_marker(results: list[dict[str, Any]]) -> None:
+    _print_marker(
+        "[MARKER_INGESTION_FINISHED]",
+        requests_total=len(results),
+        requests_done=sum(1 for item in results if item.get("status") == "done"),
+        requests_failed=sum(1 for item in results if item.get("status") == "failed"),
+        requests_canceled=sum(
+            1 for item in results if item.get("status") == "canceled"
+        ),
+        requests_timeout=sum(1 for item in results if item.get("status") == "timeout"),
+        ingested=sum(int(item.get("ingested") or 0) for item in results),
+        skipped=sum(int(item.get("skipped") or 0) for item in results),
+        failed=sum(int(item.get("failed") or 0) for item in results),
+    )
+
+
 def _plugin_params_request_compression(plugin_params: dict[str, Any] | None) -> bool:
     """Return True when plugin parameters request core decompression."""
     return bool(plugin_params and plugin_params.get("compressed"))
@@ -405,10 +430,22 @@ def _build_zip_from_sources(
                         )
                     )
                 except Exception as exc:
+                    _print_marker(
+                        "[MARKER_ZIP_CREATE_ERROR]",
+                        path=str(current_path),
+                        zip=str(output_zip),
+                        error=str(exc),
+                    )
                     print_error(
                         f"Skipping {current_path} while creating ZIP {output_zip}: {exc}"
                     )
         except Exception as exc:
+            _print_marker(
+                "[MARKER_ZIP_CREATE_ERROR]",
+                path=str(source_path),
+                zip=str(output_zip),
+                error=str(exc),
+            )
             print_error(
                 f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
             )
@@ -461,7 +498,24 @@ def _build_zip_from_sources(
                             f"({info.file_size} bytes -> {info.compress_size} bytes, "
                             f"{entries_added}/{total_entries}, {percent}%)"
                         )
+                        _print_marker(
+                            "[MARKER_FILE_ADDED_TO_ZIP]",
+                            zip=str(output_zip),
+                            entry=info.filename,
+                            source=str(source_path),
+                            file_size=info.file_size,
+                            compress_size=info.compress_size,
+                            current=entries_added,
+                            total=total_entries,
+                            percent=percent,
+                        )
                 except Exception as exc:
+                    _print_marker(
+                        "[MARKER_ZIP_CREATE_ERROR]",
+                        path=str(source_path),
+                        zip=str(output_zip),
+                        error=str(exc),
+                    )
                     print_error(
                         f"Skipping {source_path} while creating ZIP {output_zip}: {exc}"
                     )
@@ -615,6 +669,12 @@ def _build_zip_from_sources(
             console.print(
                 f"[green]Created[/] {len(created_archives)} multipart ZIP volume(s)"
             )
+            _print_marker(
+                "[MARKER_ZIP_CREATED_SUCCESSFULLY]",
+                zip_files=[str(path) for path in created_archives],
+                files_archived=archived_count,
+                entries_archived=len(archived_entries),
+            )
             return archived_count, archived_entries, created_archives
         else:
             temp_archive_path = temp_dir / output_zip.name
@@ -633,6 +693,12 @@ def _build_zip_from_sources(
             created_archives = [output_zip]
 
         console.print(f"[green]Created[/] {len(created_archives)} archive part(s)")
+        _print_marker(
+            "[MARKER_ZIP_CREATED_SUCCESSFULLY]",
+            zip_files=[str(path) for path in created_archives],
+            files_archived=archived_count,
+            entries_archived=len(archived_entries),
+        )
         return archived_count, archived_entries, created_archives
 
 
@@ -1069,6 +1135,16 @@ class _IngestWsTracker:
                 if terminal_ev is not None:
                     terminal_ev.set()
             if self._log_updates:
+                _print_marker(
+                    "[MARKER_INGEST_SOURCE_DONE_RECEIVED]",
+                    req_id=req_id,
+                    file=self._request_label(req_id),
+                    status=source_status,
+                    ingested=state.get("ingested", 0),
+                    skipped=state.get("skipped", 0),
+                    failed=state.get("failed", 0),
+                    errors=_extract_errors(obj),
+                )
                 console.print(
                     _format_per_file_log_line(
                         {
@@ -1110,6 +1186,24 @@ class _IngestWsTracker:
                 if terminal_ev is not None:
                     terminal_ev.set()
             if self._log_updates:
+                if status == "done":
+                    marker = "[MARKER_DONE_STATS_RECEIVED]"
+                elif status in {"failed", "canceled"}:
+                    marker = "[MARKER_FAILED_STATS_RECEIVED]"
+                else:
+                    marker = "[MARKER_ONGOING_STATS_RECEIVED]"
+                _print_marker(
+                    marker,
+                    req_id=req_id,
+                    file=self._request_label(req_id),
+                    event=msg.type,
+                    status=state["status"],
+                    ingested=state["ingested"],
+                    skipped=state["skipped"],
+                    failed=state["failed"],
+                    pct=obj.get("ingest_percentage"),
+                    errors=_extract_errors(obj),
+                )
                 console.print(
                     _format_per_file_log_line(
                         {
@@ -1134,6 +1228,25 @@ class _IngestWsTracker:
             if terminal_ev is not None:
                 terminal_ev.set()
             if self._log_updates:
+                _print_marker(
+                    "[MARKER_BACKEND_EXCEPTION_REPORTED]",
+                    req_id=req_id,
+                    file=self._request_label(req_id),
+                    event=msg.type,
+                    status=state["status"],
+                    errors=_extract_errors(obj),
+                )
+                _print_marker(
+                    "[MARKER_FAILED_STATS_RECEIVED]",
+                    req_id=req_id,
+                    file=self._request_label(req_id),
+                    event=msg.type,
+                    status=state["status"],
+                    ingested=state["ingested"],
+                    skipped=state["skipped"],
+                    failed=state["failed"],
+                    errors=_extract_errors(obj),
+                )
                 console.print(
                     _format_per_file_log_line(
                         {
@@ -1643,6 +1756,8 @@ def ingest_file(
                         for fp, rid in file_req_map.items()
                     ]
 
+            if wait_log:
+                _print_ingestion_finished_marker(results)
             print_result(results)
 
     asyncio.run(_run())
@@ -1949,6 +2064,8 @@ def ingest_file_to_source(
                         for fp, rid in file_req_map.items()
                     ]
 
+            if wait_log:
+                _print_ingestion_finished_marker(results)
             print_result(results)
 
     asyncio.run(_run())
@@ -1987,48 +2104,53 @@ def ingest_zip_create(
 ) -> None:
     """Create a ZIP archive from files, directories, or glob patterns."""
 
-    overwrite = not no_overwrite
-    preserve_path = not no_preserve_path
-    output_path = _resolve_path(output_zip)
-    source_paths = _expand_source_patterns(path_patterns or [], paths_file)
-    split_size_bytes = _parse_zip_split_size(split_size)
-    if split_size_bytes is not None and split_size_bytes < 0:
-        raise typer.BadParameter("Split size must be zero or greater")
+    try:
+        overwrite = not no_overwrite
+        preserve_path = not no_preserve_path
+        output_path = _resolve_path(output_zip)
+        source_paths = _expand_source_patterns(path_patterns or [], paths_file)
+        split_size_bytes = _parse_zip_split_size(split_size)
+        if split_size_bytes is not None and split_size_bytes < 0:
+            raise typer.BadParameter("Split size must be zero or greater")
 
-    if output_path.exists() and not overwrite:
-        raise typer.BadParameter(
-            f"Output ZIP already exists: {output_path}. Omit --no-overwrite to replace it"
-        )
-    if split_size_bytes and split_size_bytes > 0 and not overwrite:
-        for archive_path in output_path.parent.glob(f"{output_path.name}.*"):
-            if not archive_path.name.removeprefix(f"{output_path.name}.").isdigit():
-                continue
+        if output_path.exists() and not overwrite:
             raise typer.BadParameter(
-                f"Output ZIP already exists: {archive_path}. Omit --no-overwrite to replace it"
+                f"Output ZIP already exists: {output_path}. Omit --no-overwrite to replace it"
             )
+        if split_size_bytes and split_size_bytes > 0 and not overwrite:
+            for archive_path in output_path.parent.glob(f"{output_path.name}.*"):
+                if not archive_path.name.removeprefix(f"{output_path.name}.").isdigit():
+                    continue
+                raise typer.BadParameter(
+                    f"Output ZIP already exists: {archive_path}. Omit --no-overwrite to replace it"
+                )
 
-    archived_count, archived_entries, created_archives = _build_zip_from_sources(
-        output_path,
-        source_paths,
-        preserve_path=preserve_path,
-        split_size_bytes=split_size_bytes,
-    )
-    print_result(
-        {
-            "zip_files": [str(path) for path in created_archives],
-            "sources": [str(path) for path, _ in source_paths],
-            "files_archived": archived_count,
-            "entries_archived": len(archived_entries),
-            "entries": archived_entries,
-            "preserve_path": preserve_path,
-            "split_size": split_size_bytes,
-        },
-        formatter=lambda data: console.print(
-            f"Created ZIP archive(s) {', '.join(data['zip_files'])} from {len(data['sources'])} source"
-            f"{'s' if len(data['sources']) != 1 else ''} with {data['files_archived']} file(s), "
-            f"{data['entries_archived']} ZIP entr{'y' if data['entries_archived'] == 1 else 'ies'}."
-        ),
-    )
+        archived_count, archived_entries, created_archives = _build_zip_from_sources(
+            output_path,
+            source_paths,
+            preserve_path=preserve_path,
+            split_size_bytes=split_size_bytes,
+        )
+        print_result(
+            {
+                "zip_files": [str(path) for path in created_archives],
+                "sources": [str(path) for path, _ in source_paths],
+                "files_archived": archived_count,
+                "entries_archived": len(archived_entries),
+                "entries": archived_entries,
+                "preserve_path": preserve_path,
+                "split_size": split_size_bytes,
+            },
+            formatter=lambda data: console.print(
+                f"Created ZIP archive(s) {', '.join(data['zip_files'])} from {len(data['sources'])} source"
+                f"{'s' if len(data['sources']) != 1 else ''} with {data['files_archived']} file(s), "
+                f"{data['entries_archived']} ZIP entr{'y' if data['entries_archived'] == 1 else 'ies'}."
+            ),
+        )
+    except Exception as exc:
+        _print_marker("[MARKER_ZIP_CREATE_ERROR]", zip=output_zip, error=str(exc))
+        _print_marker("[MARKER_OTHER_ERROR]", command="zip-create", error=str(exc))
+        raise
 
 
 @app.command("raw")
@@ -2176,6 +2298,8 @@ def ingest_raw(
                 waited = await tracker.wait_for_terminal(
                     request_label, resolved_req_id, wait_timeout
                 )
+                if wait_log:
+                    _print_ingestion_finished_marker([waited])
                 print_result(waited)
             else:
                 timed_out = await _wait_for_stats_create(client, [resolved_req_id])
