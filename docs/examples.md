@@ -38,6 +38,8 @@
     - [Search by Field Value](#search-by-field-value)
     - [Complex Queries (Range, Boolean)](#complex-queries-range-boolean)
     - [Filter by Source](#filter-by-source)
+    - [Query External Data Source](#query-external-data-source)
+    - [Export Query Results](#export-query-results)
     - [Aggregation, Document Lookup, and History](#aggregation-document-lookup-and-history)
   - [Sigma Rule Queries](#sigma-rule-queries)
     - [Run Single Sigma Rule](#run-single-sigma-rule)
@@ -522,6 +524,7 @@ gulp-cli query gulp incident-001 --flt '{"tags":["suspicious"]}' --preview
 
 # Paginated results via q_options overrides
 gulp-cli query gulp incident-001 --flt '{"tags":["suspicious"]}' --limit 200 --offset 400
+```
 
 ### Query External Data Source
 
@@ -531,8 +534,6 @@ gulp-cli query external incident-001 \
   --plugin-params '{"custom_parameters":{"index":"external_logs"}}' \
   --q '{"query":{"match_all":{}}}' \
   --preview --limit 100 --offset 0
-```
-
 ```
 
 ### Export Query Results
