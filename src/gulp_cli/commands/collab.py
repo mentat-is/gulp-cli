@@ -119,6 +119,29 @@ async def _bulk_delete(
         print_result(deleted)
 
 
+@app.command("count")
+def object_count(
+    obj_type: str = typer.Argument(..., help="Collab object type, e.g. note"),
+    operation_id: str | None = typer.Option(
+        None, "--operation-id", help="Optional operation ID scope"
+    ),
+    flt: str | None = typer.Option(
+        None, "--flt", help="GulpCollabFilter JSON object"
+    ),
+) -> None:
+    async def _run() -> None:
+        flt_parsed = parse_json_option(flt, field_name="flt") or {}
+        async with get_client() as client:
+            counted = await client.plugins.object_count(
+                obj_type=obj_type,
+                flt=flt_parsed,
+                operation_id=operation_id,
+            )
+            print_result(counted)
+
+    asyncio.run(_run())
+
+
 @note_app.command("create")
 def note_create(
     operation_id: str,

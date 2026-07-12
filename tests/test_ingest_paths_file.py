@@ -4,10 +4,12 @@ import inspect
 import bz2
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import typer
 
+from gulp_cli.commands import ingest as ingest_module
 from gulp_cli.commands.ingest import (
     _expand_source_patterns,
     _maybe_bz2_compress_file_for_ingestion,
@@ -15,6 +17,75 @@ from gulp_cli.commands.ingest import (
     ingest_file_to_source,
     ingest_file,
 )
+
+
+def test_ingest_file_assigns_a_distinct_req_id_to_each_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    files = [tmp_path / "one.log", tmp_path / "two.log"]
+    for path in files:
+        path.write_text("event", encoding="utf-8")
+
+    req_ids: list[str] = []
+
+    class _Ingest:
+        async def file(self, **kwargs):
+            req_id = kwargs["params"]["req_id"]
+            req_ids.append(req_id)
+            return SimpleNamespace(req_id=req_id, status="pending")
+
+    class _Client:
+        ingest = _Ingest()
+
+        async def ensure_websocket(self) -> None:
+            return None
+
+    class _ClientContext:
+        async def __aenter__(self):
+            return _Client()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Tracker:
+        @classmethod
+        async def create(cls, *_args, **_kwargs):
+            return cls()
+
+        async def wait_for_confirm(self, _req_id: str, _timeout: float) -> bool:
+            return False
+
+        def close(self) -> None:
+            return None
+
+    async def _operation_exists(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(ingest_module, "get_client", lambda: _ClientContext())
+    monkeypatch.setattr(ingest_module, "_IngestWsTracker", _Tracker)
+    monkeypatch.setattr(ingest_module, "_ensure_operation_exists", _operation_exists)
+    monkeypatch.setattr(ingest_module, "print_result", lambda _result: None)
+
+    ingest_file(
+        operation_id="op",
+        plugin="raw",
+        file_patterns=[str(path) for path in files],
+        paths_file=None,
+        context_name="ctx",
+        plugin_params=None,
+        flt=None,
+        reset_operation=False,
+        create_operation_if_missing=False,
+        preview=False,
+        wait=False,
+        wait_log=False,
+        wait_timeout=300,
+        show_per_file_progress=False,
+        batch_size=2,
+    )
+
+    assert len(req_ids) == len(files)
+    assert len(set(req_ids)) == len(files)
 
 
 def test_ingest_file_paths_file_option_defaults_to_unset() -> None:
