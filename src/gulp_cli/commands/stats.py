@@ -413,21 +413,19 @@ def _significant_data(
         failed = data.get("records_failed")
         return f"ing={ingested or 0} skip={skipped or 0} fail={failed or 0}"
 
-    # query / ext_query: focus on query group and progress
+    # query / ext_query: focus on progress
     if req_type in {"query", "ext_query"}:
-        group = _first_non_empty(data, ["q_group", "group", "name"])
         num_q = data.get("num_queries")
         done_q = data.get("completed_queries")
         failed_q = data.get("failed_queries")
         hits = data.get("total_hits")
-        prefix = f"group={group}" if group else "query"
         if num_q is not None and done_q is not None:
             return (
-                f"{prefix} ({done_q}/{num_q}, failed={failed_q or 0}) "
+                f"query ({done_q}/{num_q}, failed={failed_q or 0}) "
                 f"hits={hits if hits is not None else '-'}"
             )
         if hits is not None:
-            return f"{prefix} hits={hits}"
+            return f"query hits={hits}"
         return prefix
 
     # rebase / enrich: focus on updated docs counts
