@@ -48,7 +48,7 @@ async def _setup_sample_docs() -> tuple[str, str]:
 
         preview = await client.queries.query_raw(
             operation_id=operation.id,
-            q=[{"query": {"match_all": {}}}],
+            q={"query": {"match_all": {}}},
             q_options={"preview_mode": True, "limit": 1, "name": "cli_enrich_preview"},
         )
         docs = (preview.get("data") or {}).get("docs") or []
@@ -75,7 +75,7 @@ async def _get_first_doc_id(operation_id: str, config_dir: Path) -> str:
     async with GulpClient(url, token=token) as client:
         preview = await client.queries.query_raw(
             operation_id=operation_id,
-            q=[{"query": {"match_all": {}}}],
+            q={"query": {"match_all": {}}},
             q_options={"preview_mode": True, "limit": 1, "name": "cli_enrich_preview"},
         )
         docs = (preview.get("data") or {}).get("docs") or []

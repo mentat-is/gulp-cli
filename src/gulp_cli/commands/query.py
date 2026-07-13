@@ -76,14 +76,14 @@ def query_raw_paginate(
 @app.command("raw")
 def query_raw(
     operation_id: str,
-    q: str = typer.Option(..., "--q", help="JSON object or array with OpenSearch DSL query/query list"),
+    q: str = typer.Option(..., "--q", help="JSON object with an OpenSearch DSL query"),
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Enable preview_mode in q_options (synchronous limited result set)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     wait: bool = typer.Option(False, "--wait"),
 ) -> None:
     async def _run() -> None:
-        q_parsed = parse_json_list_option(q, field_name="q")
+        q_parsed = parse_json_option(q, field_name="q")
         if not q_parsed:
             raise typer.BadParameter("--q is required")
         options = parse_json_option(q_options, field_name="q-options")
