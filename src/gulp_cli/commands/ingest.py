@@ -2279,6 +2279,8 @@ def ingest_raw(
                 data=payload_data,
                 params=params,
                 wait=False,
+                timeout=wait_timeout,
+                wait_for_worker=wait,
             )
 
             if hasattr(result, "model_dump"):
