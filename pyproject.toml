@@ -14,7 +14,7 @@ authors = [{ name = "Mentat", email = "info@mentat.is" }]
 description = "Command-line client for gULP"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["typer==0.23.1", "rich==15.0.0", "click==8.3.3", "gulp-sdk<2.0.0"]
+dependencies = ["typer==0.23.1", "rich==15.0.0", "click==8.3.3", "gulp-sdk>=2.0.0"]
 
 [project.optional-dependencies]
 portable = ["pyinstaller>=6.11,<7"]
