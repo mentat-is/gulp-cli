@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 import typer
 
 from gulp_cli.commands.acl import app as acl_app
@@ -28,6 +30,7 @@ from gulp_cli.config import (
     set_runtime_verbose,
 )
 from gulp_cli.extensions import load_extensions
+from gulp_cli.output import console
 from gulp_cli.version import print_version
 
 
@@ -46,6 +49,7 @@ app = typer.Typer(
 
 @app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     config_dir: str | None = typer.Option(
         None,
         "--config-dir",
@@ -70,6 +74,12 @@ def main(
         help="Show the CLI version and exit.",
     ),
 ) -> None:
+    started_at = perf_counter()
+    ctx.call_on_close(
+        lambda: console.print(
+            f"[dim]Elapsed time: {perf_counter() - started_at:.2f}s[/dim]"
+        )
+    )
     set_runtime_config_dir(config_dir)
     set_runtime_as_user(as_user)
     set_runtime_verbose(verbose)

@@ -20,6 +20,7 @@ gulp-cli --verbose --as-user USER_NAME <group> <command> ...
 
 - `--as-user` uses a different already-saved login session (**user must be already logged-in with `auth`**)for the current command only.
 - `--verbose` prints full JSON output instead of the standard summary/table output.
+- Every completed command ends with its elapsed time.
 
 ---
 
@@ -33,7 +34,7 @@ Utility commands for gULP server metadata and similar endpoints.
 gulp-cli utility gulp-version
 ```
 
-`utility gulp-version` prints only the gULP version and uses the saved CLI session, so run `gulp-cli auth login` first.
+`utility gulp-version` prints the gULP version and uses the saved CLI session, so run `gulp-cli auth login` first.
 
 ---
 
