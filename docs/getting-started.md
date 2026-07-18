@@ -236,8 +236,10 @@ Once documents are ingested, you can query them.
 ### Simple Query (Match All)
 
 ```bash
-gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}'
+gulp-cli query raw my_investigation
 ```
+
+Omitting `--q` runs a `*` (`match_all`) query and automatically enables preview mode.
 
 **Expected output:**
 
@@ -255,7 +257,7 @@ gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}'
 ### Query with Limit
 
 ```bash
-gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --limit 10 --offset 0
+gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --limit 10
 
 # Synchronous preview mode
 gulp-cli query raw my_investigation --q '{"query":{"match_all":{}}}' --preview
@@ -355,6 +357,14 @@ gulp-cli collab note create my_investigation sdk_context security \
 
 ```bash
 gulp-cli collab note list my_investigation
+```
+
+### Add and Download a Note Attachment
+
+```bash
+gulp-cli collab note add-attachment NOTE_ID ./evidence.bin --title "Evidence"
+gulp-cli collab note list-attachments NOTE_ID
+gulp-cli collab note get-attachment NOTE_ID ATTACHMENT_ID --output ./downloaded.bin
 ```
 
 ### Create a Link

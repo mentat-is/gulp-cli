@@ -8,7 +8,7 @@ from typing import Any
 import typer
 
 from gulp_cli.client import get_client
-from gulp_cli.output import print_json, print_result
+from gulp_cli.output import print_result
 from gulp_cli.utils import parse_json_list_option, parse_json_option
 
 app = typer.Typer(help="Query commands")
@@ -76,20 +76,20 @@ def query_raw_paginate(
 @app.command("raw")
 def query_raw(
     operation_id: str,
-    q: str = typer.Option(..., "--q", help="JSON object with an OpenSearch DSL query"),
+    q: str | None = typer.Option(None, "--q", help="OpenSearch DSL JSON; defaults to * in preview mode"),
     q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters"),
     preview: bool = typer.Option(False, "--preview", help="Enable preview_mode in q_options (synchronous limited result set)"),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Set q_options.limit"),
     wait: bool = typer.Option(False, "--wait"),
 ) -> None:
     async def _run() -> None:
-        q_parsed = parse_json_option(q, field_name="q")
+        q_parsed = {"query": {"match_all": {}}} if q is None else parse_json_option(q, field_name="q")
         if not q_parsed:
             raise typer.BadParameter("--q is required")
         options = parse_json_option(q_options, field_name="q-options")
         options = _merge_q_options_overrides(
             options,
-            preview=preview,
+            preview=preview or q is None,
             limit=limit,
         )
         async with get_client() as client:

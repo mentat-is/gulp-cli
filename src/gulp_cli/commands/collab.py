@@ -55,6 +55,19 @@ def _note_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def _attachment_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item.get("id", "-"),
+            "note_id": item.get("note_id", "-"),
+            "user_id": item.get("user_id", "-"),
+            "title": item.get("title", "-"),
+            "mime_type": item.get("mime_type", "-"),
+        }
+        for item in records
+    ]
+
+
 def _link_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in records:
@@ -250,6 +263,71 @@ def note_list(
         async with get_client() as client:
             records = await client.collab.note_list(operation_id=operation_id)
             print_result(records, formatter=lambda d: print_records(_note_rows(d), title="Notes"))
+
+    asyncio.run(_run())
+
+
+@note_app.command("add-attachment")
+def note_add_attachment(
+    obj_id: str,
+    attachment: str = typer.Argument(..., help="Path to the attachment file"),
+    title: str | None = typer.Option(None, "--title"),
+    mime_type: str | None = typer.Option(None, "--mime-type"),
+) -> None:
+    async def _run() -> None:
+        async with get_client() as client:
+            await client.ensure_websocket()
+            created = await client.collab.note_add_attachment(
+                obj_id,
+                attachment,
+                title=title,
+                mime_type=mime_type,
+            )
+            print_result(created)
+
+    asyncio.run(_run())
+
+
+@note_app.command("delete-attachment")
+def note_delete_attachment(obj_id: str, attachment_id: str) -> None:
+    async def _run() -> None:
+        async with get_client() as client:
+            await client.ensure_websocket()
+            deleted = await client.collab.note_delete_attachment(
+                obj_id, attachment_id
+            )
+            print_result(deleted)
+
+    asyncio.run(_run())
+
+
+@note_app.command("list-attachments")
+def note_list_attachments(obj_id: str) -> None:
+    async def _run() -> None:
+        async with get_client() as client:
+            records = await client.collab.note_list_attachments(obj_id)
+            print_result(
+                records,
+                formatter=lambda data: print_records(
+                    _attachment_rows(data), title="Note attachments"
+                ),
+            )
+
+    asyncio.run(_run())
+
+
+@note_app.command("get-attachment")
+def note_get_attachment(
+    obj_id: str,
+    attachment_id: str,
+    output: str = typer.Option(..., "--output", help="Output file path"),
+) -> None:
+    async def _run() -> None:
+        async with get_client() as client:
+            saved = await client.collab.note_get_attachment(
+                obj_id, attachment_id, output
+            )
+            print_result(saved)
 
     asyncio.run(_run())
 

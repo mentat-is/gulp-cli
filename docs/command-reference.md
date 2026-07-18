@@ -631,6 +631,8 @@ gulp-cli ingest raw my_op --data-file /tmp/raw_chunk.json --last --wait
 
 Execute a raw OpenSearch query.
 
+If `--q` is omitted, the CLI runs a `*` (`match_all`) query and automatically enables preview mode.
+
 ```bash
 gulp-cli query raw OPERATION_ID [OPTIONS]
 ```
@@ -641,7 +643,7 @@ gulp-cli query raw OPERATION_ID [OPTIONS]
 
 **Options:**
 
-- `--q TEXT` — OpenSearch query JSON (required)
+- `--q TEXT` — OpenSearch query JSON; defaults to `*` in preview mode
 - `--q-options TEXT` — Query options JSON
 - `--preview` — Enable `q_options.preview_mode=true` (synchronous preview result)
 - `--limit INTEGER` — Set `q_options.limit`
@@ -650,8 +652,8 @@ gulp-cli query raw OPERATION_ID [OPTIONS]
 **Examples:**
 
 ```bash
-# Match all documents
-gulp-cli query raw my_op --q '{"query":{"match_all":{}}}'
+# Default: preview a * query
+gulp-cli query raw my_op
 
 # Search specific field
 gulp-cli query raw my_op --q '{"query":{"term":{"EventID":4688}}}'
@@ -1470,6 +1472,34 @@ gulp-cli collab note delete-bulk incident-001 \
 
 # Delete all notes in the operation
 gulp-cli collab note delete-bulk incident-001 --all
+```
+
+---
+
+#### `note add-attachment`
+
+Upload one file (maximum 32 MiB) to a note.
+
+```bash
+gulp-cli collab note add-attachment NOTE_ID FILE [--title TEXT] [--mime-type TEXT]
+```
+
+#### `note delete-attachment`
+
+```bash
+gulp-cli collab note delete-attachment NOTE_ID ATTACHMENT_ID
+```
+
+#### `note list-attachments`
+
+```bash
+gulp-cli collab note list-attachments NOTE_ID
+```
+
+#### `note get-attachment`
+
+```bash
+gulp-cli collab note get-attachment NOTE_ID ATTACHMENT_ID --output PATH
 ```
 
 ---
