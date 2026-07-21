@@ -379,7 +379,7 @@ gulp-cli operation update my_investigation --description "Updated description"
 
 #### `delete`
 
-Delete an operation.
+Delete an operation and all related MinIO objects.
 
 ```bash
 gulp-cli operation delete OPERATION_ID [OPTIONS]
