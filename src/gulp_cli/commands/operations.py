@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 import typer
+from gulp_sdk.exceptions import NotFoundError
 
 from gulp_cli.client import get_client
 from gulp_cli.output import print_json, print_records, print_result
@@ -80,6 +81,24 @@ def operation_create(
     async def _run() -> None:
         async with get_client() as client:
             operation = await client.operations.create(name, description=description)
+            print_result(operation.model_dump(exclude_none=True))
+
+    asyncio.run(_run())
+
+
+@app.command("reset")
+def operation_reset(
+    operation_id: str,
+) -> None:
+    """Delete and recreate an operation before parallel ingestion starts."""
+
+    async def _run() -> None:
+        async with get_client() as client:
+            try:
+                await client.operations.delete(operation_id, force=True)
+            except NotFoundError:
+                pass
+            operation = await client.operations.create(operation_id)
             print_result(operation.model_dump(exclude_none=True))
 
     asyncio.run(_run())

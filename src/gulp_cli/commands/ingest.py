@@ -1120,20 +1120,18 @@ class _IngestWsTracker:
             state["skipped"] += done_skipped
             state["failed"] += done_failed
             source_status = str(obj.get("status", state["status"]))
-            state["status"] = source_status
-            if (
-                self._source_done_is_terminal
-                and source_status not in _TERMINAL_STATUSES
-            ):
+            if self._source_done_is_terminal:
+                state["status"] = source_status
                 state["seen_confirm"] = True
 
                 confirm_ev = self._confirm_events.get(req_id)
                 if confirm_ev is not None:
                     confirm_ev.set()
 
-                terminal_ev = self._terminal_events.get(req_id)
-                if terminal_ev is not None:
-                    terminal_ev.set()
+                if source_status in _TERMINAL_STATUSES:
+                    terminal_ev = self._terminal_events.get(req_id)
+                    if terminal_ev is not None:
+                        terminal_ev.set()
             if self._log_updates:
                 _print_marker(
                     "[MARKER_INGEST_SOURCE_DONE_RECEIVED]",
@@ -1506,7 +1504,6 @@ def ingest_file(
             req_to_file: dict[str, str] = {}
             tracker = await _IngestWsTracker.create(
                 client,
-                source_done_is_terminal=True,
                 log_updates=wait_log,
                 request_label_getter=lambda req_id: req_to_file.get(req_id, req_id),
                 request_status_fetcher=_fetch_request_status,
@@ -1853,7 +1850,6 @@ def ingest_file_to_source(
 
             tracker = await _IngestWsTracker.create(
                 client,
-                source_done_is_terminal=True,
                 log_updates=wait_log,
                 request_label_getter=lambda req_id: req_to_file.get(req_id, req_id),
                 request_status_fetcher=_fetch_request_status,

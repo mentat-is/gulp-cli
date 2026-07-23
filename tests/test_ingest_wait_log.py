@@ -295,6 +295,47 @@ async def test_ingest_ws_tracker_keeps_failed_terminal_status_after_source_done(
 
 
 @pytest.mark.asyncio
+async def test_ingest_ws_tracker_waits_for_terminal_stats_after_source_done() -> None:
+    class _FakeWs:
+        def on_message(self, *_args, **_kwargs) -> None:
+            pass
+
+        def off_message(self, *_args, **_kwargs) -> None:
+            pass
+
+    tracker = _IngestWsTracker(
+        _FakeWs(),
+        request_label_getter=lambda _req_id: "/tmp/sample.txt",
+    )
+    wait_task = asyncio.create_task(
+        tracker.wait_for_terminal("/tmp/sample.txt", "req12345", timeout=1)
+    )
+    tracker._on_message(  # noqa: SLF001
+        WSMessage(
+            type=WSMessageType.INGEST_SOURCE_DONE.value,
+            req_id="req12345",
+            timestamp_msec=0,
+            data={"obj": {"status": "done", "records_ingested": 14}},
+        )
+    )
+    await asyncio.sleep(0)
+    assert not wait_task.done()
+
+    tracker._on_message(  # noqa: SLF001
+        WSMessage(
+            type=WSMessageType.STATS_UPDATE.value,
+            req_id="req12345",
+            timestamp_msec=0,
+            data={"obj": {"status": "done", "records_ingested": 14}},
+        )
+    )
+    result = await wait_task
+    tracker.close()
+
+    assert result["status"] == "done"
+
+
+@pytest.mark.asyncio
 async def test_ingest_ws_tracker_returns_errors_for_failed_stats() -> None:
     class _FakeWs:
         def on_message(self, *_args, **_kwargs) -> None:
