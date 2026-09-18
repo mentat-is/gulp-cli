@@ -3,13 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import typer
 
 from gulp_cli.client import get_client
 from gulp_cli.output import print_result
-from gulp_cli.utils import parse_json_list_option, parse_json_option
+from gulp_cli.utils import (
+    parse_json_array_option,
+    parse_json_list_option,
+    parse_json_option,
+)
 
 app = typer.Typer(help="Query commands")
 
@@ -42,20 +46,43 @@ def _merge_q_options_overrides(
         return None
     return merged
 
+
 @app.command("raw-paginate")
 def query_raw_paginate(
     operation_id: str,
     q: str = typer.Option(..., "--q", help="JSON object with an OpenSearch DSL query"),
     limit: int = typer.Option(10, "--limit", min=1, help="Number of results to return"),
-    offset: int = typer.Option(0, "--offset", min=0, help="Number of results to skip (offset to start from)"),
-    q_options: str | None = typer.Option(None, "--q-options", help="JSON object for GulpQueryParameters (overridden by --limit/--offset)"),
+    offset: int = typer.Option(
+        0, "--offset", min=0, help="Number of results to skip (offset to start from)"
+    ),
+    pagination_mode: Literal["offset", "pit"] | None = typer.Option(
+        None,
+        "--pagination-mode",
+        help="Pagination strategy: offset (legacy) or pit (stable snapshot); defaults to q-options/backend",
+    ),
+    pit_id: str | None = typer.Option(
+        None,
+        "--pit-id",
+        help="PIT ID returned by a previous raw-paginate request",
+    ),
+    search_after: str | None = typer.Option(
+        None,
+        "--search-after",
+        help="JSON array of sort values returned by a previous PIT page",
+    ),
+    q_options: str | None = typer.Option(
+        None,
+        "--q-options",
+        help="JSON object for GulpQueryParameters (overridden by --limit/--offset)",
+    ),
 ) -> None:
-    """Run a paginated query with direct response (no background task)."""
+    """Run an offset or point-in-time paginated query."""
 
     async def _run() -> None:
         q_parsed = parse_json_list_option(q, field_name="q")
         if not q_parsed:
             raise typer.BadParameter("--q is required")
+        cursor = parse_json_array_option(search_after, field_name="search-after")
         options = parse_json_option(q_options, field_name="q-options")
         options = _merge_q_options_overrides(
             options,
@@ -68,10 +95,36 @@ def query_raw_paginate(
                 operation_id=operation_id,
                 q=q_parsed[0],
                 q_options=options,
+                pagination_mode=pagination_mode,
+                pit_id=pit_id,
+                search_after=cursor,
             )
             print_result(result)
 
     asyncio.run(_run())
+
+
+@app.command("raw-paginate-close")
+def query_raw_paginate_close(
+    operation_id: str,
+    pit_id: str = typer.Option(
+        ...,
+        "--pit-id",
+        help="PIT ID to close",
+    ),
+) -> None:
+    """Close a point-in-time snapshot opened by raw-paginate."""
+
+    async def _run() -> None:
+        async with get_client() as client:
+            result = await client.queries.query_raw_paginate_close(
+                operation_id=operation_id,
+                pit_id=pit_id,
+            )
+            print_result(result)
+
+    asyncio.run(_run())
+
 
 @app.command("raw")
 def query_raw(

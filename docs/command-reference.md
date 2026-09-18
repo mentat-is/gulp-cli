@@ -675,7 +675,8 @@ gulp-cli query raw my_op --q '{"query":{"match_all":{}}}' --q-options '{"preview
 
 #### `raw-paginate`
 
-Execute a raw OpenSearch query with simple pagination.
+Execute a raw OpenSearch query with legacy offset pagination or a stable PIT
+snapshot.
 
 ```bash
 gulp-cli query raw-paginate OPERATION_ID [OPTIONS]
@@ -687,7 +688,10 @@ gulp-cli query raw-paginate OPERATION_ID [OPTIONS]
 - `--q TEXT` — OpenSearch query JSON (required)
 - `--limit INTEGER` — Number of results to return (default: 10)
 - `--offset INTEGER` — Result offset for pagination (default: 0)
-- `--q-options TEXT` — Query options JSON (i.e. for sorting, --limit/--offset override q_options values)
+- `--pagination-mode [offset|pit]` — Pagination strategy (the backend defaults to `offset`)
+- `--pit-id TEXT` — PIT ID returned by an earlier request
+- `--search-after TEXT` — JSON array of sort values returned by an earlier PIT page
+- `--q-options TEXT` — Query options JSON (for example sorting or PIT state; explicitly supplied CLI options override matching values)
 
 **Examples:**
 
@@ -697,7 +701,36 @@ gulp-cli query raw-paginate my_op --q '{"query":{"match_all":{}}}'
 
 # Get next 10 results (pagination)
 gulp-cli query raw-paginate my_op --q '{"query":{"match_all":{}}}' --offset 10
+
+# Open a stable snapshot. Keep the pit_id and search_after from the output.
+gulp-cli query raw-paginate my_op \
+  --q '{"query":{"match_all":{}}}' \
+  --q-options '{"sort":{"@timestamp":"asc"}}' \
+  --pagination-mode pit
+
+# Continue the snapshot using its cursor
+gulp-cli query raw-paginate my_op \
+  --q '{"query":{"match_all":{}}}' \
+  --q-options '{"sort":{"@timestamp":"asc"}}' \
+  --pagination-mode pit \
+  --pit-id PIT_ID \
+  --search-after '[1725000000000,"cursor-value"]' \
+  --offset 10
 ```
+
+---
+
+#### `raw-paginate-close`
+
+Close a PIT snapshot as soon as it is no longer needed.
+
+```bash
+gulp-cli query raw-paginate-close OPERATION_ID --pit-id PIT_ID
+```
+
+PIT expiration is reported by the server as `PaginationSnapshotExpired`. Start
+a new `raw-paginate --pagination-mode pit` request without `--pit-id` instead
+of retrying the expired snapshot.
 
 ---
 
