@@ -38,6 +38,23 @@ def parse_json_list_option(raw: str | None, *, field_name: str) -> list[dict[str
     raise typer.BadParameter(f"--{field_name} must be a JSON object or a list of JSON objects")
 
 
+def parse_json_array_option(raw: str | None, *, field_name: str) -> list[Any] | None:
+    """Parse a JSON array whose elements may be scalar sort values."""
+
+    if raw is None:
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"Invalid JSON for --{field_name}: {exc}") from exc
+    if not isinstance(data, list):
+        raise typer.BadParameter(f"--{field_name} must be a JSON array")
+    return data
+
+
 def comma_split(raw: str | None) -> list[str]:
     if not raw:
         return []
